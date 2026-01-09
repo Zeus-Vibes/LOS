@@ -51,7 +51,8 @@ Improvements:
 * Feedback for each user
 * Payment Integration
 * proper pricing by shopkeeper to user as per the distance
-* Any Source for the platform to earn money from shopkeepers and users (Future implementations) 
+* Any Source for the platform to earn money from shopkeepers and users (Future implementations)
+* Finally, Fill the gaps...!!! :)
 
 
 
