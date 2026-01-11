@@ -170,13 +170,7 @@ const Login = () => {
               </Button>
             </form>
 
-            <div className="mt-4 p-3 bg-muted/50 rounded-lg">
-              <p className="text-xs text-muted-foreground mb-2">Demo credentials:</p>
-              <div className="text-xs space-y-1">
-                <p><span className="font-medium">Customer:</span> customer1 / customer123</p>
-                <p><span className="font-medium">Shopkeeper:</span> shopkeeper1 / shopkeeper123</p>
-              </div>
-            </div>
+
             
             <div className="mt-6 text-center text-sm text-muted-foreground">
               Don't have an account?{" "}

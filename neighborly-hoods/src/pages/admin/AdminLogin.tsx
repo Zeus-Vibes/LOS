@@ -172,14 +172,7 @@ const AdminLogin = () => {
               </Button>
             </form>
 
-            {/* Demo credentials */}
-            <div className="mt-6 p-3 bg-slate-900/50 rounded-lg border border-slate-700">
-              <p className="text-xs text-slate-500 mb-2">Demo Admin Credentials:</p>
-              <div className="text-xs text-slate-400 font-mono">
-                <p>Username: <span className="text-orange-400">admin</span></p>
-                <p>Password: <span className="text-orange-400">admin123</span></p>
-              </div>
-            </div>
+
             
             <div className="mt-6 text-center">
               <Link to="/login" className="text-sm text-slate-400 hover:text-white transition-colors">

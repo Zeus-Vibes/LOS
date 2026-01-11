@@ -33,6 +33,8 @@ export interface Shop {
   delivery_radius: number;
   minimum_order_amount: number;
   delivery_fee: number;
+  delivery_fee_per_km: number;
+  free_delivery_above: number | null;
   created_at: string;
   updated_at: string;
   products?: Product[];
@@ -214,6 +216,11 @@ const shopService = {
     return response.data;
   },
 
+  async getShopReviews(shopId: number): Promise<Review[]> {
+    const response = await api.get<Review[]>('/shops/reviews/', { params: { shop: shopId } });
+    return response.data;
+  },
+
   async createReview(data: { product?: number; shop?: number; rating: number; title?: string; comment: string }): Promise<Review> {
     const response = await api.post<Review>('/shops/reviews/', data);
     return response.data;
@@ -232,6 +239,26 @@ const shopService = {
 
   async removeFromWishlist(productId: number): Promise<{ message: string }> {
     const response = await api.delete<{ message: string }>('/shops/wishlist/remove/', { data: { product_id: productId } });
+    return response.data;
+  },
+
+  // Shopkeeper reviews
+  async getMyReviews(): Promise<Review[]> {
+    const response = await api.get<Review[]>('/shops/my-reviews/');
+    return response.data;
+  },
+
+  // Shopkeeper analytics
+  async getMyAnalytics(): Promise<{
+    daily_revenue: { date: string; revenue: number; count: number }[];
+    orders_by_status: { status: string; count: number }[];
+    top_products: { product__name: string; total_sold: number; revenue: number }[];
+    monthly_revenue: { month: string; revenue: number; count: number }[];
+    total_orders: number;
+    total_revenue: number;
+    average_order_value: number;
+  }> {
+    const response = await api.get('/shops/my-analytics/');
     return response.data;
   },
 };

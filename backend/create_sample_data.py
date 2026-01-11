@@ -8,6 +8,26 @@ from accounts.models import User, CustomerProfile, ShopkeeperProfile
 from shops.models import Category, Shop, Product
 from django.utils import timezone
 
+# Create admin user
+admin_user, created = User.objects.get_or_create(
+    username='admin',
+    defaults={
+        'email': 'admin@example.com',
+        'first_name': 'Admin',
+        'last_name': 'User',
+        'user_type': 'admin',
+        'is_staff': True,
+        'is_superuser': True,
+        'is_verified': True,
+    }
+)
+if created:
+    admin_user.set_password('admin123')
+    admin_user.save()
+    print(f"Created admin user: {admin_user.username}")
+else:
+    print(f"Admin user already exists: {admin_user.username}")
+
 # Create sample categories
 categories_data = [
     {'name': 'Groceries', 'description': 'Fresh groceries and daily essentials'},

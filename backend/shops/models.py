@@ -53,12 +53,27 @@ class Shop(models.Model):
     delivery_radius = models.DecimalField(max_digits=5, decimal_places=2, default=5.00)  # in km
     minimum_order_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    # Distance-based pricing
+    delivery_fee_per_km = models.DecimalField(max_digits=10, decimal_places=2, default=5.00)  # Additional fee per km
+    free_delivery_above = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)  # Free delivery for orders above this amount
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
         return self.name
+    
+    def calculate_delivery_fee(self, distance_km: float, order_amount: float) -> float:
+        """Calculate delivery fee based on distance and order amount"""
+        # Free delivery if order is above threshold
+        if self.free_delivery_above and order_amount >= float(self.free_delivery_above):
+            return 0.0
+        
+        # Base fee + distance-based fee
+        base_fee = float(self.delivery_fee)
+        distance_fee = float(self.delivery_fee_per_km) * distance_km
+        
+        return round(base_fee + distance_fee, 2)
 
 class Product(models.Model):
     PRODUCT_STATUS_CHOICES = (

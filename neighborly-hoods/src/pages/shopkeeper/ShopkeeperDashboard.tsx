@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -17,13 +18,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { 
-  Store, ShoppingBag, Package, TrendingUp, Clock, Star, 
+  Store, ShoppingBag, Package, TrendingUp, Star, 
   Plus, Settings, LogOut, Bell, DollarSign, Edit, Trash2,
-  CheckCircle, XCircle, AlertCircle, ShieldCheck, ShieldAlert, ShieldX, Loader2
+  AlertCircle, ShieldCheck, ShieldAlert, ShieldX, Loader2,
+  BarChart3, FileText, Download, Camera, MessageSquare
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import shopService, { Product, Category } from "@/services/shopService";
+import shopService, { Product, Category, Review } from "@/services/shopService";
 import api from "@/lib/api";
 
 interface ShopkeeperProfile {
@@ -90,6 +92,13 @@ const ShopkeeperDashboard = () => {
     status: 'available'
   });
   const [isSaving, setIsSaving] = useState(false);
+  
+  // New state for reviews, analytics, and notifications
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [productImage, setProductImage] = useState<string | null>(null);
+  const productImageRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!user || user.user_type !== 'shopkeeper') {
@@ -152,6 +161,22 @@ const ShopkeeperDashboard = () => {
           total_reviews: 0
         });
       }
+
+      // Fetch reviews
+      try {
+        const reviewsData = await shopService.getMyReviews();
+        setReviews(reviewsData);
+      } catch (e) {
+        console.log('No reviews found');
+      }
+
+      // Fetch analytics
+      try {
+        const analyticsData = await shopService.getMyAnalytics();
+        setAnalytics(analyticsData);
+      } catch (e) {
+        console.log('No analytics data');
+      }
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
     } finally {
@@ -160,8 +185,45 @@ const ShopkeeperDashboard = () => {
   };
 
   const handleLogout = async () => {
+    setShowLogoutDialog(false);
     await logout();
     navigate('/');
+  };
+
+  const handleProductImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast({ title: "Error", description: "Image must be less than 5MB", variant: "destructive" });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProductImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const exportToCSV = (data: any[], filename: string) => {
+    if (!data.length) {
+      toast({ title: "No data", description: "No data to export", variant: "destructive" });
+      return;
+    }
+    const headers = Object.keys(data[0]);
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => headers.map(h => JSON.stringify(row[h] ?? '')).join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast({ title: "Exported", description: `${filename} exported successfully` });
   };
 
   const openAddProduct = () => {
@@ -176,6 +238,7 @@ const ShopkeeperDashboard = () => {
       brand: '',
       status: 'available'
     });
+    setProductImage(null);
     setShowProductDialog(true);
   };
 
@@ -191,6 +254,7 @@ const ShopkeeperDashboard = () => {
       brand: product.brand || '',
       status: product.status
     });
+    setProductImage(product.image || null);
     setShowProductDialog(true);
   };
 
@@ -308,14 +372,46 @@ const ShopkeeperDashboard = () => {
               </div>
             </Link>
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="w-5 h-5" />
-                {stats?.pending_orders ? (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                    {stats.pending_orders}
-                  </span>
-                ) : null}
-              </Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="relative">
+                    <Bell className="w-5 h-5" />
+                    {stats?.pending_orders ? (
+                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                        {stats.pending_orders}
+                      </span>
+                    ) : null}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80" align="end">
+                  <div className="space-y-4">
+                    <h4 className="font-semibold">Notifications</h4>
+                    {stats?.pending_orders ? (
+                      <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-lg">
+                        <ShoppingBag className="w-5 h-5 text-orange-600 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-sm">{stats.pending_orders} Pending Orders</p>
+                          <p className="text-xs text-muted-foreground">Orders waiting for confirmation</p>
+                        </div>
+                      </div>
+                    ) : null}
+                    {orders.filter(o => o.status === 'pending').slice(0, 3).map(order => (
+                      <div key={order.id} className="flex items-start gap-3 p-2 hover:bg-accent rounded-lg">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                          <ShoppingBag className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">Order #{order.id}</p>
+                          <p className="text-xs text-muted-foreground">{order.customer_name} • ₹{order.total_amount}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {!stats?.pending_orders && orders.filter(o => o.status === 'pending').length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">No new notifications</p>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white text-sm font-medium">
                   {user?.first_name?.[0] || 'S'}
@@ -363,7 +459,7 @@ const ShopkeeperDashboard = () => {
                 <Link to="/settings" className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-accent">
                   <Settings className="w-5 h-5" />Settings
                 </Link>
-                <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-accent text-destructive">
+                <button onClick={() => setShowLogoutDialog(true)} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-accent text-destructive">
                   <LogOut className="w-5 h-5" />Logout
                 </button>
               </nav>
@@ -460,6 +556,9 @@ const ShopkeeperDashboard = () => {
               <TabsList>
                 <TabsTrigger value="orders">Orders</TabsTrigger>
                 <TabsTrigger value="products">Products</TabsTrigger>
+                <TabsTrigger value="analytics">Analytics</TabsTrigger>
+                <TabsTrigger value="reviews">Reviews</TabsTrigger>
+                <TabsTrigger value="reports">Reports</TabsTrigger>
               </TabsList>
 
               <TabsContent value="orders">
@@ -557,6 +656,152 @@ const ShopkeeperDashboard = () => {
                   )}
                 </Card>
               </TabsContent>
+
+              {/* Analytics Tab */}
+              <TabsContent value="analytics">
+                <Card className="p-6">
+                  <h2 className="font-display text-xl font-semibold mb-4 flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5" />Analytics Overview
+                  </h2>
+                  <div className="grid sm:grid-cols-3 gap-4 mb-6">
+                    <div className="p-4 bg-blue-50 rounded-lg">
+                      <p className="text-sm text-blue-600">Total Orders</p>
+                      <p className="text-2xl font-bold text-blue-800">{analytics?.total_orders || 0}</p>
+                    </div>
+                    <div className="p-4 bg-green-50 rounded-lg">
+                      <p className="text-sm text-green-600">Total Revenue</p>
+                      <p className="text-2xl font-bold text-green-800">₹{analytics?.total_revenue?.toFixed(0) || 0}</p>
+                    </div>
+                    <div className="p-4 bg-purple-50 rounded-lg">
+                      <p className="text-sm text-purple-600">Avg Order Value</p>
+                      <p className="text-2xl font-bold text-purple-800">₹{analytics?.average_order_value?.toFixed(0) || 0}</p>
+                    </div>
+                  </div>
+                  
+                  <h3 className="font-semibold mb-3">Orders by Status</h3>
+                  <div className="grid sm:grid-cols-4 gap-3 mb-6">
+                    {analytics?.orders_by_status?.map((item: any) => (
+                      <div key={item.status} className="p-3 border rounded-lg text-center">
+                        <p className="text-lg font-bold">{item.count}</p>
+                        <p className="text-xs text-muted-foreground capitalize">{item.status.replace('_', ' ')}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <h3 className="font-semibold mb-3">Top Selling Products</h3>
+                  {analytics?.top_products?.length > 0 ? (
+                    <div className="space-y-2">
+                      {analytics.top_products.map((item: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between p-3 bg-accent/50 rounded-lg">
+                          <span className="font-medium">{item.product__name}</span>
+                          <div className="text-right">
+                            <p className="font-semibold">₹{item.revenue}</p>
+                            <p className="text-xs text-muted-foreground">{item.total_sold} sold</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-center py-4">No sales data yet</p>
+                  )}
+                </Card>
+              </TabsContent>
+
+              {/* Reviews Tab */}
+              <TabsContent value="reviews">
+                <Card className="p-6">
+                  <h2 className="font-display text-xl font-semibold mb-4 flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5" />Customer Reviews
+                  </h2>
+                  {reviews.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Star className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">No reviews yet</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {reviews.map((review) => (
+                        <div key={review.id} className="p-4 border rounded-lg">
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <p className="font-medium">{review.customer_name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {review.product_name || review.shop_name}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {[...Array(5)].map((_, i) => (
+                                <Star key={i} className={`w-4 h-4 ${i < review.rating ? 'fill-warning text-warning' : 'text-muted-foreground'}`} />
+                              ))}
+                            </div>
+                          </div>
+                          {review.title && <p className="font-medium mb-1">{review.title}</p>}
+                          <p className="text-sm text-muted-foreground">{review.comment}</p>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            {new Date(review.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              </TabsContent>
+
+              {/* Reports Tab */}
+              <TabsContent value="reports">
+                <Card className="p-6">
+                  <h2 className="font-display text-xl font-semibold mb-4 flex items-center gap-2">
+                    <FileText className="w-5 h-5" />Business Reports
+                  </h2>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="p-4 border rounded-lg">
+                      <h3 className="font-medium mb-2">Orders Report</h3>
+                      <p className="text-sm text-muted-foreground mb-4">Export all orders data</p>
+                      <Button variant="outline" onClick={() => exportToCSV(orders.map(o => ({
+                        order_id: o.id,
+                        customer: o.customer_name,
+                        amount: o.total_amount,
+                        status: o.status,
+                        date: o.created_at
+                      })), 'orders')}>
+                        <Download className="w-4 h-4 mr-2" />Export Orders
+                      </Button>
+                    </div>
+                    <div className="p-4 border rounded-lg">
+                      <h3 className="font-medium mb-2">Products Report</h3>
+                      <p className="text-sm text-muted-foreground mb-4">Export all products data</p>
+                      <Button variant="outline" onClick={() => exportToCSV(products.map(p => ({
+                        name: p.name,
+                        category: p.category_name,
+                        price: p.price,
+                        stock: p.stock_quantity,
+                        status: p.status
+                      })), 'products')}>
+                        <Download className="w-4 h-4 mr-2" />Export Products
+                      </Button>
+                    </div>
+                    <div className="p-4 border rounded-lg">
+                      <h3 className="font-medium mb-2">Revenue Report</h3>
+                      <p className="text-sm text-muted-foreground mb-4">Export revenue analytics</p>
+                      <Button variant="outline" onClick={() => exportToCSV(analytics?.monthly_revenue || [], 'revenue')}>
+                        <Download className="w-4 h-4 mr-2" />Export Revenue
+                      </Button>
+                    </div>
+                    <div className="p-4 border rounded-lg">
+                      <h3 className="font-medium mb-2">Reviews Report</h3>
+                      <p className="text-sm text-muted-foreground mb-4">Export customer reviews</p>
+                      <Button variant="outline" onClick={() => exportToCSV(reviews.map(r => ({
+                        customer: r.customer_name,
+                        rating: r.rating,
+                        comment: r.comment,
+                        date: r.created_at
+                      })), 'reviews')}>
+                        <Download className="w-4 h-4 mr-2" />Export Reviews
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              </TabsContent>
             </Tabs>
           </main>
         </div>
@@ -609,6 +854,25 @@ const ShopkeeperDashboard = () => {
                 <Input id="brand" value={productForm.brand} onChange={(e) => setProductForm({...productForm, brand: e.target.value})} />
               </div>
             </div>
+            <div>
+              <Label>Product Image</Label>
+              <div className="flex items-center gap-4 mt-2">
+                <div className="w-20 h-20 rounded-lg border-2 border-dashed border-border flex items-center justify-center overflow-hidden">
+                  {productImage ? (
+                    <img src={productImage} alt="Product" className="w-full h-full object-cover" />
+                  ) : (
+                    <Package className="w-8 h-8 text-muted-foreground" />
+                  )}
+                </div>
+                <div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => productImageRef.current?.click()}>
+                    <Camera className="w-4 h-4 mr-2" />Upload Image
+                  </Button>
+                  <input ref={productImageRef} type="file" accept="image/*" onChange={handleProductImageUpload} className="hidden" />
+                  <p className="text-xs text-muted-foreground mt-1">Max 5MB, JPG/PNG</p>
+                </div>
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowProductDialog(false)}>Cancel</Button>
@@ -616,6 +880,20 @@ const ShopkeeperDashboard = () => {
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               {editingProduct ? 'Update' : 'Add'} Product
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Logout Confirmation Dialog */}
+      <Dialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Logout</DialogTitle>
+            <DialogDescription>Are you sure you want to logout from your shopkeeper dashboard?</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowLogoutDialog(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleLogout}>Logout</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

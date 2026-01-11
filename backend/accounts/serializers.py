@@ -59,7 +59,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ('id', 'username', 'email', 'first_name', 'last_name', 
                  'phone_number', 'address', 'user_type', 'profile_picture', 
                  'is_verified', 'created_at')
-        read_only_fields = ('id', 'created_at', 'is_verified')
+        read_only_fields = ('id', 'username', 'user_type', 'created_at', 'is_verified')
 
 class CustomerProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)

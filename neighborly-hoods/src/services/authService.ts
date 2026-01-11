@@ -141,8 +141,49 @@ const authService = {
 
   // Update user profile
   async updateProfile(data: Partial<User>): Promise<User> {
+    const response = await api.patch<User>('/auth/profile/', data);
+    localStorage.setItem('user', JSON.stringify(response.data));
+    return response.data;
+  },
+
+  // Update profile with image (base64)
+  async updateProfileWithImage(data: Partial<User> & { profile_image?: string }): Promise<User> {
     const response = await api.put<User>('/auth/profile/', data);
     localStorage.setItem('user', JSON.stringify(response.data));
+    return response.data;
+  },
+
+  // Save notification preferences
+  async saveNotificationPreferences(preferences: {
+    email_orders: boolean;
+    email_promotions: boolean;
+    push_orders: boolean;
+    push_promotions: boolean;
+  }): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>('/auth/profile/notifications/', preferences);
+    return response.data;
+  },
+
+  // Get notification preferences
+  async getNotificationPreferences(): Promise<{
+    email_orders: boolean;
+    email_promotions: boolean;
+    push_orders: boolean;
+    push_promotions: boolean;
+  }> {
+    const response = await api.get('/auth/profile/notifications/');
+    return response.data;
+  },
+
+  // Change password
+  async changePassword(data: { current_password: string; new_password: string }): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>('/auth/profile/change-password/', data);
+    return response.data;
+  },
+
+  // Delete account
+  async deleteAccount(password: string): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>('/auth/profile/delete/', { password });
     return response.data;
   },
 

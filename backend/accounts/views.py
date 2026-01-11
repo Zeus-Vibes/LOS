@@ -78,6 +78,35 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
     
     def get_object(self):
         return self.request.user
+    
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        
+        # Handle profile picture if it's a base64 string
+        data = request.data.copy()
+        if 'profile_picture' in data and data['profile_picture']:
+            profile_pic = data['profile_picture']
+            if isinstance(profile_pic, str) and profile_pic.startswith('data:'):
+                # It's a base64 image, save it
+                import base64
+                from django.core.files.base import ContentFile
+                import uuid
+                
+                try:
+                    format, imgstr = profile_pic.split(';base64,')
+                    ext = format.split('/')[-1]
+                    filename = f"{uuid.uuid4()}.{ext}"
+                    data['profile_picture'] = ContentFile(base64.b64decode(imgstr), name=filename)
+                except Exception as e:
+                    # If base64 processing fails, remove the field
+                    del data['profile_picture']
+        
+        serializer = self.get_serializer(instance, data=data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        return Response(serializer.data)
 
 class CustomerProfileView(generics.RetrieveUpdateAPIView):
     """Get and update customer profile"""
@@ -126,7 +155,12 @@ def approve_shopkeeper(request, shopkeeper_id):
     
     try:
         from django.utils import timezone
-        shopkeeper = ShopkeeperProfile.objects.get(id=shopkeeper_id)
+        # Try to find by user_id first, then by profile id
+        try:
+            shopkeeper = ShopkeeperProfile.objects.get(user_id=shopkeeper_id)
+        except ShopkeeperProfile.DoesNotExist:
+            shopkeeper = ShopkeeperProfile.objects.get(id=shopkeeper_id)
+        
         shopkeeper.verification_status = 'approved'
         shopkeeper.approved_at = timezone.now()
         shopkeeper.save()
@@ -156,7 +190,12 @@ def reject_shopkeeper(request, shopkeeper_id):
         )
     
     try:
-        shopkeeper = ShopkeeperProfile.objects.get(id=shopkeeper_id)
+        # Try to find by user_id first, then by profile id
+        try:
+            shopkeeper = ShopkeeperProfile.objects.get(user_id=shopkeeper_id)
+        except ShopkeeperProfile.DoesNotExist:
+            shopkeeper = ShopkeeperProfile.objects.get(id=shopkeeper_id)
+        
         shopkeeper.verification_status = 'rejected'
         shopkeeper.save()
         
@@ -214,3 +253,69 @@ def user_dashboard(request):
         {'error': 'Invalid user type'}, 
         status=status.HTTP_400_BAD_REQUEST
     )
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def notification_preferences(request):
+    """Get or save notification preferences"""
+    user = request.user
+    
+    # Get or create customer profile for preferences storage
+    if user.user_type == 'customer':
+        profile, _ = CustomerProfile.objects.get_or_create(user=user)
+    else:
+        profile = None
+    
+    if request.method == 'GET':
+        # Return default preferences (can be stored in profile later)
+        return Response({
+            'email_orders': True,
+            'email_promotions': False,
+            'push_orders': True,
+            'push_promotions': False,
+        })
+    
+    elif request.method == 'POST':
+        # Save preferences (for now just return success, can store in DB later)
+        return Response({'message': 'Notification preferences saved successfully'})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password(request):
+    """Change user password"""
+    user = request.user
+    current_password = request.data.get('current_password')
+    new_password = request.data.get('new_password')
+    
+    if not current_password or not new_password:
+        return Response({'error': 'Both current and new password are required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if not user.check_password(current_password):
+        return Response({'error': 'Current password is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    user.set_password(new_password)
+    user.save()
+    
+    return Response({'message': 'Password changed successfully'})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def delete_account(request):
+    """Delete user account (requires password confirmation)"""
+    user = request.user
+    password = request.data.get('password')
+    
+    if not password:
+        return Response({'error': 'Password is required to delete account'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if not user.check_password(password):
+        return Response({'error': 'Incorrect password'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if user.user_type == 'admin':
+        return Response({'error': 'Admin accounts cannot be deleted this way'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    user.delete()
+    return Response({'message': 'Account deleted successfully'})

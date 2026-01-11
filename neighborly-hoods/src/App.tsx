@@ -4,12 +4,15 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+import NotificationPermission from "./components/NotificationPermission";
 
 // Pages
 import Index from "./pages/Index";
 import HowItWorks from "./pages/HowItWorks";
 import ForShopkeepers from "./pages/ForShopkeepers";
 import NotFound from "./pages/NotFound";
+import TermsOfService from "./pages/TermsOfService";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 // Auth Pages
 import Login from "./pages/auth/Login";
@@ -24,6 +27,7 @@ import Checkout from "./pages/customer/Checkout";
 import OrderConfirmation from "./pages/customer/OrderConfirmation";
 import OrderTracking from "./pages/customer/OrderTracking";
 import CustomerDashboard from "./pages/customer/CustomerDashboard";
+import MyOrders from "./pages/customer/MyOrders";
 
 // Shopkeeper Pages
 import ShopkeeperDashboard from "./pages/shopkeeper/ShopkeeperDashboard";
@@ -43,12 +47,15 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <NotificationPermission />
         <BrowserRouter>
           <Routes>
             {/* Public Pages */}
             <Route path="/" element={<Index />} />
             <Route path="/how-it-works" element={<HowItWorks />} />
             <Route path="/for-shopkeepers" element={<ForShopkeepers />} />
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
             
             {/* Auth Pages */}
             <Route path="/login" element={<Login />} />
@@ -63,7 +70,7 @@ const App = () => (
             <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
             <Route path="/order/:orderId" element={<OrderTracking />} />
             <Route path="/customer/dashboard" element={<CustomerDashboard />} />
-            <Route path="/customer/orders" element={<CustomerDashboard />} />
+            <Route path="/customer/orders" element={<MyOrders />} />
             
             {/* Shopkeeper Pages */}
             <Route path="/shopkeeper/dashboard" element={<ShopkeeperDashboard />} />

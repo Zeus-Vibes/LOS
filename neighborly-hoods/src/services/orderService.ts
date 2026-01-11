@@ -161,6 +161,11 @@ const orderService = {
     return response.data;
   },
 
+  async cancelOrder(orderId: number): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/orders/orders/${orderId}/cancel/`);
+    return response.data;
+  },
+
   // Coupons
   async getCoupons(): Promise<Coupon[]> {
     const response = await api.get<Coupon[]>('/orders/coupons/');

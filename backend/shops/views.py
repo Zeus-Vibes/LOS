@@ -379,3 +379,91 @@ def remove_from_wishlist(request):
         return Response({'message': 'Product removed from wishlist'}, status=status.HTTP_200_OK)
     except Wishlist.DoesNotExist:
         return Response({'error': 'Product not in wishlist'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def shopkeeper_reviews(request):
+    """Get reviews for the shopkeeper's shop and products"""
+    if request.user.user_type != 'shopkeeper':
+        return Response({'error': 'Only shopkeepers can access this'}, status=status.HTTP_403_FORBIDDEN)
+    
+    shop = Shop.objects.filter(owner=request.user).first()
+    if not shop:
+        return Response({'error': 'No shop found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Get reviews for the shop and its products
+    shop_reviews = Review.objects.filter(shop=shop)
+    product_reviews = Review.objects.filter(product__shop=shop)
+    
+    all_reviews = (shop_reviews | product_reviews).distinct().order_by('-created_at')
+    serializer = ReviewSerializer(all_reviews, many=True)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def shopkeeper_analytics(request):
+    """Get analytics data for the shopkeeper's shop"""
+    from orders.models import Order, OrderItem
+    from django.db.models import Sum, Count, F
+    from django.db.models.functions import TruncDate, TruncMonth
+    from datetime import datetime, timedelta
+    
+    if request.user.user_type != 'shopkeeper':
+        return Response({'error': 'Only shopkeepers can access this'}, status=status.HTTP_403_FORBIDDEN)
+    
+    shop = Shop.objects.filter(owner=request.user).first()
+    if not shop:
+        return Response({'error': 'No shop found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Get date range (last 30 days)
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=30)
+    
+    orders = Order.objects.filter(shop=shop)
+    recent_orders = orders.filter(created_at__gte=start_date)
+    
+    # Daily revenue for last 30 days
+    daily_revenue = recent_orders.filter(status='delivered').annotate(
+        date=TruncDate('created_at')
+    ).values('date').annotate(
+        revenue=Sum('total_amount'),
+        count=Count('id')
+    ).order_by('date')
+    
+    # Orders by status
+    orders_by_status = orders.values('status').annotate(count=Count('id'))
+    
+    # Top selling products
+    top_products = OrderItem.objects.filter(
+        order__shop=shop,
+        order__status='delivered'
+    ).values(
+        'product__name'
+    ).annotate(
+        total_sold=Sum('quantity'),
+        revenue=Sum('subtotal')
+    ).order_by('-total_sold')[:5]
+    
+    # Monthly revenue (last 6 months)
+    six_months_ago = end_date - timedelta(days=180)
+    monthly_revenue = orders.filter(
+        created_at__gte=six_months_ago,
+        status='delivered'
+    ).annotate(
+        month=TruncMonth('created_at')
+    ).values('month').annotate(
+        revenue=Sum('total_amount'),
+        count=Count('id')
+    ).order_by('month')
+    
+    return Response({
+        'daily_revenue': list(daily_revenue),
+        'orders_by_status': list(orders_by_status),
+        'top_products': list(top_products),
+        'monthly_revenue': list(monthly_revenue),
+        'total_orders': orders.count(),
+        'total_revenue': float(orders.filter(status='delivered').aggregate(Sum('total_amount'))['total_amount__sum'] or 0),
+        'average_order_value': float(orders.filter(status='delivered').aggregate(avg=Sum('total_amount') / Count('id'))['avg'] or 0),
+    })

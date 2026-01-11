@@ -171,21 +171,142 @@ const adminService = {
     return response.data;
   },
 
-  async getAllUsers(type?: string): Promise<AdminUser[]> {
+  // User CRUD
+  async getUsers(type?: string): Promise<AdminUser[]> {
     const params = type ? { type } : {};
     const response = await api.get<AdminUser[]>('/auth/admin/users/', { params });
     return response.data;
   },
 
-  async getAllShops(status?: string): Promise<AdminShop[]> {
+  async getUser(id: number): Promise<AdminUser> {
+    const response = await api.get<AdminUser>(`/auth/admin/users/${id}/`);
+    return response.data;
+  },
+
+  async createUser(data: Partial<AdminUser> & { password?: string }): Promise<{ message: string; id: number }> {
+    const response = await api.post('/auth/admin/users/', data);
+    return response.data;
+  },
+
+  async updateUser(id: number, data: Partial<AdminUser>): Promise<{ message: string }> {
+    const response = await api.put(`/auth/admin/users/${id}/`, data);
+    return response.data;
+  },
+
+  async deleteUser(id: number): Promise<{ message: string }> {
+    const response = await api.delete(`/auth/admin/users/${id}/`);
+    return response.data;
+  },
+
+  // Shop CRUD
+  async getShops(status?: string): Promise<AdminShop[]> {
     const params = status ? { status } : {};
     const response = await api.get<AdminShop[]>('/auth/admin/shops/', { params });
     return response.data;
   },
 
-  async getAllOrders(status?: string): Promise<AdminOrder[]> {
+  async getShop(id: number): Promise<AdminShop> {
+    const response = await api.get<AdminShop>(`/auth/admin/shops/${id}/`);
+    return response.data;
+  },
+
+  async createShop(data: any): Promise<{ message: string; id: number }> {
+    const response = await api.post('/auth/admin/shops/', data);
+    return response.data;
+  },
+
+  async updateShop(id: number, data: Partial<AdminShop>): Promise<{ message: string }> {
+    const response = await api.put(`/auth/admin/shops/${id}/`, data);
+    return response.data;
+  },
+
+  async deleteShop(id: number): Promise<{ message: string }> {
+    const response = await api.delete(`/auth/admin/shops/${id}/`);
+    return response.data;
+  },
+
+  // Order CRUD
+  async getOrders(status?: string): Promise<AdminOrder[]> {
     const params = status ? { status } : {};
     const response = await api.get<AdminOrder[]>('/auth/admin/orders/', { params });
+    return response.data;
+  },
+
+  async getOrder(id: number): Promise<AdminOrder> {
+    const response = await api.get<AdminOrder>(`/auth/admin/orders/${id}/`);
+    return response.data;
+  },
+
+  async updateOrder(id: number, data: { status?: string; payment_status?: string }): Promise<{ message: string }> {
+    const response = await api.put(`/auth/admin/orders/${id}/`, data);
+    return response.data;
+  },
+
+  async deleteOrder(id: number): Promise<{ message: string }> {
+    const response = await api.delete(`/auth/admin/orders/${id}/`);
+    return response.data;
+  },
+
+  // Product CRUD
+  async getProducts(params?: { status?: string; shop?: number }): Promise<any[]> {
+    const response = await api.get('/auth/admin/products/', { params });
+    return response.data;
+  },
+
+  async getProduct(id: number): Promise<any> {
+    const response = await api.get(`/auth/admin/products/${id}/`);
+    return response.data;
+  },
+
+  async createProduct(data: any): Promise<{ message: string; id: number }> {
+    const response = await api.post('/auth/admin/products/', data);
+    return response.data;
+  },
+
+  async updateProduct(id: number, data: any): Promise<{ message: string }> {
+    const response = await api.put(`/auth/admin/products/${id}/`, data);
+    return response.data;
+  },
+
+  async deleteProduct(id: number): Promise<{ message: string }> {
+    const response = await api.delete(`/auth/admin/products/${id}/`);
+    return response.data;
+  },
+
+  // Category CRUD
+  async getCategories(): Promise<any[]> {
+    const response = await api.get('/auth/admin/categories/');
+    return response.data;
+  },
+
+  async createCategory(data: { name: string; description?: string }): Promise<{ message: string; id: number }> {
+    const response = await api.post('/auth/admin/categories/', data);
+    return response.data;
+  },
+
+  async updateCategory(id: number, data: { name?: string; description?: string; is_active?: boolean }): Promise<{ message: string }> {
+    const response = await api.put(`/auth/admin/categories/${id}/`, data);
+    return response.data;
+  },
+
+  async deleteCategory(id: number): Promise<{ message: string }> {
+    const response = await api.delete(`/auth/admin/categories/${id}/`);
+    return response.data;
+  },
+
+  // Reviews CRUD
+  async getReviews(params?: { rating?: number; approved?: boolean }): Promise<any[]> {
+    const response = await api.get('/auth/admin/reviews/', { params });
+    return response.data;
+  },
+
+  async updateReview(id: number, data: { is_approved?: boolean; is_verified?: boolean }): Promise<{ message: string }> {
+    const response = await api.put(`/auth/admin/reviews/${id}/`, data);
+    return response.data;
+  },
+
+  async deleteReview(id: number): Promise<{ message: string }> {
+    const response = await api.delete(`/auth/admin/reviews/${id}/`);
     return response.data;
   },
 

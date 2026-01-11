@@ -215,6 +215,31 @@ class OrderViewSet(viewsets.ModelViewSet):
             'order': OrderSerializer(order).data
         }, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        order = self.get_object()
+        
+        # Only customer can cancel their own order
+        if request.user != order.customer and request.user.user_type != 'admin':
+            return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Can only cancel pending or confirmed orders
+        if order.status not in ['pending', 'confirmed']:
+            return Response({'error': 'Cannot cancel order in current status'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        order.status = 'cancelled'
+        order.save()
+        
+        # Create tracking entry
+        OrderTracking.objects.create(
+            order=order,
+            status='cancelled',
+            message='Order cancelled by customer',
+            created_by=request.user
+        )
+        
+        return Response({'message': 'Order cancelled successfully'}, status=status.HTTP_200_OK)
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def track_order(request, order_id):

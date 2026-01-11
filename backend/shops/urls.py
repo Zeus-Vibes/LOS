@@ -26,4 +26,6 @@ urlpatterns = [
     path('my-products/<int:product_id>/delete/', views.delete_product, name='delete_product'),
     path('my-orders/', views.shopkeeper_orders, name='shopkeeper_orders'),
     path('my-stats/', views.shopkeeper_stats, name='shopkeeper_stats'),
+    path('my-reviews/', views.shopkeeper_reviews, name='shopkeeper_reviews'),
+    path('my-analytics/', views.shopkeeper_analytics, name='shopkeeper_analytics'),
 ]
