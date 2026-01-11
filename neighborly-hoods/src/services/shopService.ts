@@ -217,8 +217,9 @@ const shopService = {
   },
 
   async getShopReviews(shopId: number): Promise<Review[]> {
-    const response = await api.get<Review[]>('/shops/reviews/', { params: { shop: shopId } });
-    return response.data;
+    const response = await api.get('/shops/reviews/', { params: { shop: shopId } });
+    // Handle both array and paginated response
+    return Array.isArray(response.data) ? response.data : (response.data?.results || []);
   },
 
   async createReview(data: { product?: number; shop?: number; rating: number; title?: string; comment: string }): Promise<Review> {

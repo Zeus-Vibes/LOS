@@ -44,7 +44,8 @@ const ShopDetail = () => {
       // Try to fetch reviews if available
       try {
         const reviewsData = await shopService.getShopReviews(Number(id));
-        setReviews(reviewsData);
+        // Handle both array and paginated response
+        setReviews(Array.isArray(reviewsData) ? reviewsData : (reviewsData?.results || []));
       } catch {
         setReviews([]);
       }
