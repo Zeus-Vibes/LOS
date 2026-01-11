@@ -1,58 +1,242 @@
-Errors:
-Admin: 
-* Order Status [section not proper]
-* Lack of crud operations user related [Make it like Django admin]
-* Notification option not working in admin
-* Admin Setting Icon not working (fill the gaps)
-* changes applied in admin profile are not reflecting(admin profile set up not working)
-* Admin portal login - remove admin credentials
+# LOS - Local Online Shop
 
-* Admin Logout confirmation
-* Admin Icon functionality - it should be clickable and can be use to go to store
-* Admin Settings are working on main site but not on admin dashboard
-* Settings - profile(allow to keep images in profile), Security (Add Authentication on delete), Notification(should save preferences)
-* Admin should Be able to generate statistical reports regarding the business
+A neighborhood marketplace platform connecting local shops with customers.
 
-Shopkeepers:
-* Notification option isn't working
-* Same problem with settings as admin
-* No Image integration in profile or in product or in shop
-* Can't see orders
-* Can't see products
-* Feedback option should be added in all the users(Shopkeeper, Customer, and Admin)
-* Shopkeeper also be able to generate necessary reports regarding the business
+---
 
-Customer:
-* Notification icon not working
-* Add profile photo for the user
-* No my orders page(or maybe not redirecting to it, however it contains a lot of errors)
-* Orders problem (dummy data only no realtime changes in it)
-* Profile - can't save changes, No photo or camera integration, Notification - can't save preferences
-* My orders problem - Page not working / opening and real time data not showing
-* It is automatically giving random address of users (look and check)
-* Only UPI and COD options should be available (Proper integration for online payment)
-* Cancel Order Problem
-* in my order no back option
-* Remove Live Tracking section
+## Table of Contents
 
-Visitor: 
-* Notification icon should not work for them it should redirect to the registration / signup option
-* Login Page - Back to home button on the left side
-* Remove Dummy Credentials
-* Visitors cannot pay or order should be redirected to the register
-* Cart dummy data problem (Can't remove and updating as per the real time in customer)
-* Real time products should be added in cart
-* When trying to pay on order go to register page
-* Add dummy data in terms and services and privacy policy pages
+1. [Overview](#overview)
+2. [Features](#features)
+3. [Tech Stack](#tech-stack)
+4. [Project Structure](#project-structure)
+5. [Installation](#installation)
+6. [Configuration](#configuration)
+7. [Running](#running)
+8. [API Endpoints](#api-endpoints)
+9. [User Credentials](#user-credentials)
 
-Improvements:
-* Proper Authentication
-* Location Integration (Real time distance and accordingly shops) - Apply proper algorithms
-* Feedback for each user
-* Payment Integration
-* proper pricing by shopkeeper to user as per the distance
-* Any Source for the platform to earn money from shopkeepers and users (Future implementations)
-* Finally, Fill the gaps...!!! :)
+---
 
+## Overview
 
+LOS enables local shopkeepers to list products online and customers to browse, order, and track deliveries from nearby shops. The platform provides separate dashboards for customers, shopkeepers, and administrators.
 
+---
+
+## Features
+
+Customer
+- Browse shops and products
+- Cart and checkout
+- Order tracking
+- Reviews and ratings
+
+Shopkeeper
+- Shop and product management
+- Order processing
+- Sales analytics
+- Customer feedback
+
+Admin
+- Platform statistics
+- User management
+- Shop approvals
+- Report generation
+
+---
+
+## Tech Stack
+
+Frontend: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui
+Backend: Django 5, Django REST Framework, Simple JWT, SQLite
+
+---
+
+## Project Structure
+
+```
+LOS/
+|
++-- backend/
+|   |
+|   +-- accounts/
+|   |   +-- models.py          # User, CustomerProfile, ShopkeeperProfile
+|   |   +-- views.py           # Auth endpoints
+|   |   +-- admin_views.py     # Admin dashboard API
+|   |   +-- serializers.py
+|   |   +-- urls.py
+|   |
+|   +-- shops/
+|   |   +-- models.py          # Shop, Product, Category, Review
+|   |   +-- views.py           # Shop and product endpoints
+|   |   +-- serializers.py
+|   |   +-- urls.py
+|   |
+|   +-- orders/
+|   |   +-- models.py          # Order, Cart, OrderItem
+|   |   +-- views.py           # Order endpoints
+|   |   +-- serializers.py
+|   |   +-- urls.py
+|   |
+|   +-- neighborly_backend/
+|   |   +-- settings.py        # Django configuration
+|   |   +-- urls.py            # Root URL config
+|   |
+|   +-- manage.py
+|   +-- requirements.txt
+|
++-- neighborly-hoods/
+|   |
+|   +-- src/
+|   |   +-- components/
+|   |   |   +-- ui/            # shadcn/ui components
+|   |   |   +-- layout/        # Navbar, Footer
+|   |   |
+|   |   +-- pages/
+|   |   |   +-- admin/         # AdminDashboard, AdminLogin
+|   |   |   +-- auth/          # Login, SignUp, ShopkeeperRegister
+|   |   |   +-- customer/      # Dashboard, Cart, Orders, Checkout
+|   |   |   +-- shopkeeper/    # ShopkeeperDashboard
+|   |   |
+|   |   +-- services/
+|   |   |   +-- authService.ts
+|   |   |   +-- shopService.ts
+|   |   |   +-- orderService.ts
+|   |   |   +-- adminService.ts
+|   |   |
+|   |   +-- contexts/
+|   |   |   +-- AuthContext.tsx
+|   |   |
+|   |   +-- lib/
+|   |   |   +-- api.ts         # Axios instance
+|   |   |   +-- utils.ts
+|   |   |
+|   |   +-- App.tsx
+|   |   +-- main.tsx
+|   |
+|   +-- index.html
+|   +-- package.json
+|   +-- vite.config.ts
+|   +-- tailwind.config.ts
+|
++-- README.md
+```
+
+---
+
+## Installation
+
+Prerequisites: Node.js 18+, Python 3.10+
+
+### Backend
+
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate        # Windows
+source venv/bin/activate     # macOS/Linux
+pip install -r requirements.txt
+python manage.py migrate
+python create_sample_data.py # Optional: seed data
+```
+
+### Frontend
+
+```bash
+cd neighborly-hoods
+npm install
+```
+
+---
+
+## Configuration
+
+Backend (.env in backend/):
+```
+DEBUG=True
+SECRET_KEY=your-secret-key
+ALLOWED_HOSTS=localhost,127.0.0.1
+CORS_ALLOWED_ORIGINS=http://localhost:8080
+```
+
+Frontend API URL (src/lib/api.ts):
+```typescript
+const API_BASE_URL = 'http://localhost:8000/api';
+```
+
+---
+
+## Running
+
+Backend:
+```bash
+cd backend
+python manage.py runserver
+```
+Runs at http://localhost:8000
+
+Frontend:
+```bash
+cd neighborly-hoods
+npm run dev
+```
+Runs at http://localhost:8080
+
+---
+
+## API Endpoints
+
+### Authentication
+```
+POST   /api/auth/register/             Register customer
+POST   /api/auth/register/shopkeeper/  Register shopkeeper
+POST   /api/auth/login/                Login
+POST   /api/auth/logout/               Logout
+GET    /api/auth/profile/              Get profile
+PATCH  /api/auth/profile/              Update profile
+```
+
+### Shops
+```
+GET    /api/shops/shops/               List shops
+GET    /api/shops/shops/{id}/          Shop details
+GET    /api/shops/products/            List products
+GET    /api/shops/categories/          List categories
+```
+
+### Orders
+```
+GET    /api/orders/cart/               Get cart
+POST   /api/orders/cart/add/           Add to cart
+POST   /api/orders/checkout/           Checkout
+GET    /api/orders/orders/             List orders
+GET    /api/orders/orders/{id}/        Order details
+```
+
+Full API documentation: backend/API_DOCUMENTATION.md
+
+---
+
+## User Credentials
+
+Admin
+- Username: admin
+- Password: admin123
+- URL: /admin
+
+Customer
+- Username: customer1
+- Password: customer123
+- URL: /customer/dashboard
+
+Shopkeeper
+- Username: shopkeeper1
+- Password: shopkeeper123
+- URL: /shopkeeper/dashboard
+
+---
+
+## License
+
+MIT
