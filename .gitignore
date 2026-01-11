@@ -42,3 +42,5 @@ staticfiles/
 
 # Lock files
 bun.lockb
+.kiro
+.vscode
