@@ -3,13 +3,29 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Store, ShoppingBag, Package, 
-  ChevronRight, User, Settings, LogOut, Heart, Bell, Loader2
+import {
+  Store, ShoppingBag, Package,
+  ChevronRight, User, Settings, LogOut, Heart, Bell, Loader2, MapPin, Navigation
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import orderService, { Order } from "@/services/orderService";
+import shopService, { Shop } from "@/services/shopService";
+import { getFullImageUrl } from '@/lib/utils';
 import { useToast } from "@/hooks/use-toast";
+import NotificationDropdown from "@/components/NotificationDropdown";
+import { lazy, Suspense } from "react";
+
+// Lazy load map component
+// const MapComponent = lazy(() => import('@/components/MapComponent'));
+
+// DUMMY MAP COMPONENT
+const MapComponentPlaceholder = () => (
+  <div className="h-64 flex flex-col items-center justify-center bg-muted rounded-xl text-center p-4">
+    <MapPin className="w-10 h-10 text-muted-foreground mb-3" />
+    <p className="text-muted-foreground font-medium">Map View Temporarily Disabled</p>
+    <p className="text-xs text-muted-foreground mt-1">We're updating our neighborhood discovery features. Shop lists are still functional below.</p>
+  </div>
+);
 
 const CustomerDashboard = () => {
   const { user, logout } = useAuth();
@@ -18,6 +34,9 @@ const CustomerDashboard = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [nearbyShops, setNearbyShops] = useState<Shop[]>([]);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
 
   useEffect(() => {
     if (!user || user.user_type !== 'customer') {
@@ -52,6 +71,39 @@ const CustomerDashboard = () => {
     navigate('/');
   };
 
+  const getMyLocation = async () => {
+    setIsGettingLocation(true);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          setUserLocation({ lat: latitude, lng: longitude });
+
+          // Fetch nearby shops
+          try {
+            const shops = await shopService.getShops();
+            // Filter shops with location within 10km
+            const shopsWithLocation = shops.filter(s => s.latitude && s.longitude);
+            setNearbyShops(shopsWithLocation.slice(0, 5));
+          } catch (err) {
+            console.error('Failed to fetch shops:', err);
+          }
+
+          setIsGettingLocation(false);
+          toast({ title: "Location found!", description: "Showing nearby shops" });
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+          toast({ title: "Location error", description: "Could not get your location", variant: "destructive" });
+          setIsGettingLocation(false);
+        }
+      );
+    } else {
+      toast({ title: "Not supported", description: "Geolocation is not supported by your browser", variant: "destructive" });
+      setIsGettingLocation(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       pending: 'bg-yellow-100 text-yellow-800',
@@ -84,9 +136,7 @@ const CustomerDashboard = () => {
               <span className="font-display font-bold text-xl">LOS</span>
             </Link>
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon">
-                <Bell className="w-5 h-5" />
-              </Button>
+              <NotificationDropdown />
               <Link to="/cart">
                 <Button variant="ghost" size="icon">
                   <ShoppingBag className="w-5 h-5" />
@@ -103,8 +153,14 @@ const CustomerDashboard = () => {
           <aside className="lg:col-span-1">
             <Card className="p-6">
               <div className="text-center mb-6">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center mx-auto mb-4 text-white text-2xl font-bold">
-                  {user?.first_name?.[0] || user?.username?.[0] || 'U'}
+                <div className="w-20 h-20 rounded-full overflow-hidden mx-auto mb-4 border-2 border-primary/10 shadow-sm">
+                  {user?.profile_picture ? (
+                    <img src={getFullImageUrl(user.profile_picture) || ''} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white text-2xl font-bold">
+                      {user?.first_name?.[0] || user?.username?.[0] || 'U'}
+                    </div>
+                  )}
                 </div>
                 <h2 className="font-display text-xl font-semibold">{user?.first_name} {user?.last_name}</h2>
                 <p className="text-sm text-muted-foreground">{user?.email}</p>
@@ -214,6 +270,53 @@ const CustomerDashboard = () => {
                       </div>
                     </Link>
                   ))}
+                </div>
+              )}
+            </Card>
+
+            {/* Nearby Shops Map */}
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+                    <MapPin className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-display text-xl font-semibold">Shops Near You</h2>
+                    <p className="text-sm text-muted-foreground">Find shops in your area</p>
+                  </div>
+                </div>
+                <Button onClick={getMyLocation} disabled={isGettingLocation} variant="outline">
+                  {isGettingLocation ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Navigation className="w-4 h-4 mr-2" />
+                  )}
+                  {userLocation ? 'Refresh' : 'Find Shops'}
+                </Button>
+              </div>
+
+              {userLocation ? (
+                <div className="space-y-4">
+                  <MapComponentPlaceholder />
+                  {nearbyShops.length > 0 && (
+                    <div className="grid sm:grid-cols-2 gap-2 mt-4">
+                      {nearbyShops.slice(0, 4).map(shop => (
+                        <Link key={shop.id} to={`/shop/${shop.id}`} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent transition-colors">
+                          <Store className="w-8 h-8 text-primary" />
+                          <div>
+                            <p className="font-medium text-sm">{shop.name}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-1">{shop.address}</p>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="h-48 flex flex-col items-center justify-center bg-muted rounded-xl">
+                  <MapPin className="w-10 h-10 text-muted-foreground mb-3" />
+                  <p className="text-muted-foreground text-center">Click "Find Shops" to see nearby stores on the map</p>
                 </div>
               )}
             </Card>

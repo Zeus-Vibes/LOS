@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
-from .models import User, CustomerProfile, ShopkeeperProfile
+from .models import User, CustomerProfile, ShopkeeperProfile, Notification
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
@@ -134,3 +134,13 @@ class ShopkeeperRegistrationSerializer(serializers.ModelSerializer):
             shop.categories.add(default_category)
         
         return user
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    """Serializer for notifications"""
+    class Meta:
+        model = Notification
+        fields = ['id', 'notification_type', 'title', 'message', 'is_read', 
+                  'related_order_id', 'related_shop_id', 'created_at']
+        read_only_fields = ['id', 'notification_type', 'title', 'message', 
+                           'related_order_id', 'related_shop_id', 'created_at']

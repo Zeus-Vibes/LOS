@@ -48,3 +48,30 @@ class ShopkeeperProfile(models.Model):
     
     def __str__(self):
         return f"Shopkeeper: {self.business_name} ({self.user.username})"
+
+
+class Notification(models.Model):
+    """Notifications for all user types"""
+    NOTIFICATION_TYPES = (
+        ('order_placed', 'New Order'),
+        ('order_status', 'Order Status Update'),
+        ('shop_approved', 'Shop Approved'),
+        ('shop_rejected', 'Shop Rejected'),
+        ('new_review', 'New Review'),
+        ('system', 'System Notification'),
+    )
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    notification_type = models.CharField(max_length=20, choices=NOTIFICATION_TYPES)
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    is_read = models.BooleanField(default=False)
+    related_order_id = models.IntegerField(blank=True, null=True)
+    related_shop_id = models.IntegerField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.title} - {self.user.username}"

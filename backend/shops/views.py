@@ -74,6 +74,33 @@ class ShopViewSet(viewsets.ModelViewSet):
         products = Product.objects.filter(shop=shop)
         serializer = ProductSerializer(products, many=True)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def update_location(self, request, pk=None):
+        """Update the shop's latitude and longitude"""
+        shop = self.get_object()
+        
+        # Verify the user owns this shop
+        if shop.owner != request.user:
+            return Response({'error': 'You do not own this shop'}, status=status.HTTP_403_FORBIDDEN)
+        
+        latitude = request.data.get('latitude')
+        longitude = request.data.get('longitude')
+        
+        if latitude is None or longitude is None:
+            return Response({'error': 'Both latitude and longitude are required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            shop.latitude = float(latitude)
+            shop.longitude = float(longitude)
+            shop.save()
+            return Response({
+                'message': 'Location updated successfully',
+                'latitude': str(shop.latitude),
+                'longitude': str(shop.longitude)
+            })
+        except (ValueError, TypeError):
+            return Response({'error': 'Invalid coordinates'}, status=status.HTTP_400_BAD_REQUEST)
 
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all()

@@ -41,7 +41,9 @@ class Shop(models.Model):
     
     # Images
     logo = models.ImageField(upload_to='shop_logos/', blank=True, null=True)
+    logo_base64 = models.TextField(blank=True, null=True)  # Base64 logo storage
     banner_image = models.ImageField(upload_to='shop_banners/', blank=True, null=True)
+    banner_base64 = models.TextField(blank=True, null=True)  # Base64 banner storage
     
     # Status and ratings
     status = models.CharField(max_length=20, choices=SHOP_STATUS_CHOICES, default='active')
@@ -101,6 +103,7 @@ class Product(models.Model):
     
     # Images
     image = models.ImageField(upload_to='products/', blank=True, null=True)
+    image_base64 = models.TextField(blank=True, null=True)  # Base64 image storage in database
     
     # Status and ratings
     status = models.CharField(max_length=20, choices=PRODUCT_STATUS_CHOICES, default='available')

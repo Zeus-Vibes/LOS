@@ -11,12 +11,28 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogD
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Users, Store, Package, ShoppingCart, DollarSign, TrendingUp,
-  RefreshCw, LogOut, Plus, Edit, Trash2, Loader2, CheckCircle, XCircle, Settings, Home, AlertTriangle, Star, Download, FileText, BarChart3, Bell
+  RefreshCw, LogOut, Plus, Edit, Trash2, Loader2, CheckCircle, XCircle, Settings, Home, AlertTriangle, Star, Download, FileText, BarChart3, Bell, MapPin
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import adminService, { DashboardStats, RecentOrder, RecentUser, PendingShopkeeper, TopShop, RevenueData } from "@/services/adminService";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { lazy, Suspense } from "react";
+
+// Lazy load map component
+// const MapComponent = lazy(() => import('@/components/MapComponent'));
+
+// DUMMY MAP COMPONENT
+const MapComponentPlaceholder = () => (
+  <div className="h-96 flex flex-col items-center justify-center bg-gray-50 rounded-xl text-center p-8 border-2 border-dashed border-gray-200">
+    <MapPin className="w-12 h-12 text-gray-300 mb-4" />
+    <h3 className="font-semibold text-lg text-gray-600">Map View Temporarily Disabled</h3>
+    <p className="text-gray-500 max-w-md mx-auto mt-2">
+      The platform map integration is currently being updated for better performance.
+      Shop location data is still being tracked and managed in the database.
+    </p>
+  </div>
+);
 
 const AdminDashboard = () => {
   const { user, logout, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -31,7 +47,7 @@ const AdminDashboard = () => {
   const [topShops, setTopShops] = useState<TopShop[]>([]);
   const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
   const [activeTab, setActiveTab] = useState("overview");
-  
+
   // CRUD state
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [allShops, setAllShops] = useState<any[]>([]);
@@ -39,7 +55,7 @@ const AdminDashboard = () => {
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [allReviews, setAllReviews] = useState<any[]>([]);
-  
+
   // Dialog state
   const [showUserDialog, setShowUserDialog] = useState(false);
   const [showShopDialog, setShowShopDialog] = useState(false);
@@ -73,7 +89,7 @@ const AdminDashboard = () => {
       console.log('Stats data received:', statsData);
       setStats(statsData); setRecentOrders(ordersData); setRecentUsers(usersData);
       setPendingShopkeepers(pendingData); setTopShops(shopsData); setRevenueData(chartData);
-    } catch (error) { 
+    } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
       toast({ title: "Error", description: "Failed to load dashboard data", variant: "destructive" });
     }
@@ -85,7 +101,7 @@ const AdminDashboard = () => {
       if (tab === 'users') { const data = await adminService.getUsers(); setAllUsers(data); }
       if (tab === 'shops') { const data = await adminService.getShops(); setAllShops(data); }
       if (tab === 'orders') { const data = await adminService.getOrders(); setAllOrders(data); }
-      if (tab === 'products') { 
+      if (tab === 'products') {
         const [prods, cats] = await Promise.all([adminService.getProducts(), adminService.getCategories()]);
         setAllProducts(prods); setCategories(cats);
       }
@@ -102,19 +118,19 @@ const AdminDashboard = () => {
   const handleRejectShopkeeper = async (id: number) => { try { await adminService.rejectShopkeeper(id); toast({ title: "Shopkeeper rejected" }); fetchDashboardData(); } catch { toast({ title: "Error", variant: "destructive" }); } };
 
   const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = { 
-      pending: 'bg-yellow-100 text-yellow-800', 
-      confirmed: 'bg-blue-100 text-blue-800', 
-      preparing: 'bg-purple-100 text-purple-800', 
+    const colors: Record<string, string> = {
+      pending: 'bg-yellow-100 text-yellow-800',
+      confirmed: 'bg-blue-100 text-blue-800',
+      preparing: 'bg-purple-100 text-purple-800',
       ready_for_pickup: 'bg-indigo-100 text-indigo-800',
       ready: 'bg-indigo-100 text-indigo-800',
       out_for_delivery: 'bg-cyan-100 text-cyan-800',
-      delivered: 'bg-green-100 text-green-800', 
-      cancelled: 'bg-red-100 text-red-800', 
+      delivered: 'bg-green-100 text-green-800',
+      cancelled: 'bg-red-100 text-red-800',
       refunded: 'bg-orange-100 text-orange-800',
-      paid: 'bg-green-100 text-green-800', 
+      paid: 'bg-green-100 text-green-800',
       failed: 'bg-red-100 text-red-800',
-      active: 'bg-green-100 text-green-800', 
+      active: 'bg-green-100 text-green-800',
       inactive: 'bg-gray-100 text-gray-800',
       available: 'bg-green-100 text-green-800',
       out_of_stock: 'bg-red-100 text-red-800',
@@ -185,8 +201,8 @@ const AdminDashboard = () => {
   if (!isAuthenticated || user?.user_type !== 'admin') return null;
 
   const orderStatusData = stats ? [
-    { name: 'Pending', value: stats.orders.pending, color: '#eab308' }, 
-    { name: 'Delivered', value: stats.orders.completed, color: '#22c55e' }, 
+    { name: 'Pending', value: stats.orders.pending, color: '#eab308' },
+    { name: 'Delivered', value: stats.orders.completed, color: '#22c55e' },
     { name: 'Cancelled', value: stats.orders.cancelled, color: '#ef4444' },
     { name: 'In Progress', value: Math.max(0, stats.orders.total - stats.orders.pending - stats.orders.completed - stats.orders.cancelled), color: '#8b5cf6' }
   ].filter(item => item.value > 0) : [];
@@ -276,6 +292,7 @@ const AdminDashboard = () => {
             <TabsTrigger value="products">Products</TabsTrigger>
             <TabsTrigger value="reviews">Reviews</TabsTrigger>
             <TabsTrigger value="reports">Reports</TabsTrigger>
+            <TabsTrigger value="locations">Locations</TabsTrigger>
             <TabsTrigger value="approvals">Approvals ({pendingShopkeepers.length})</TabsTrigger>
           </TabsList>
 
@@ -447,31 +464,31 @@ const AdminDashboard = () => {
                 </Select>
               </div>
             </CardHeader><CardContent>
-              {allOrders.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                  <p>No orders found</p>
-                </div>
-              ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b bg-gray-50"><th className="text-left p-3 font-semibold">Order #</th><th className="text-left p-3 font-semibold">Customer</th><th className="text-left p-3 font-semibold">Shop</th><th className="text-left p-3 font-semibold">Amount</th><th className="text-left p-3 font-semibold">Status</th><th className="text-left p-3 font-semibold">Payment</th><th className="text-left p-3 font-semibold">Date</th><th className="text-left p-3 font-semibold">Actions</th></tr></thead>
-                  <tbody>{allOrders.map(order => (
-                    <tr key={order.id} className="border-b hover:bg-gray-50 transition-colors">
-                      <td className="p-3 font-medium text-primary">{order.order_number}</td>
-                      <td className="p-3">{order.customer}</td>
-                      <td className="p-3">{order.shop}</td>
-                      <td className="p-3 font-medium">{formatCurrency(order.total_amount)}</td>
-                      <td className="p-3"><Badge className={`${getStatusColor(order.status)} capitalize`}>{order.status.replace(/_/g, ' ')}</Badge></td>
-                      <td className="p-3"><Badge className={`${getStatusColor(order.payment_status)} capitalize`}>{order.payment_status}</Badge></td>
-                      <td className="p-3 text-gray-500">{formatDate(order.created_at)}</td>
-                      <td className="p-3"><div className="flex gap-1"><Button size="sm" variant="outline" onClick={() => openEditOrder(order)}><Edit className="w-3 h-3" /></Button><Button size="sm" variant="destructive" onClick={() => handleDeleteOrder(order.id)}><Trash2 className="w-3 h-3" /></Button></div></td>
-                    </tr>
-                  ))}</tbody>
-                </table>
-              </div>
-              )}
-            </CardContent></Card>
+                {allOrders.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <p>No orders found</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead><tr className="border-b bg-gray-50"><th className="text-left p-3 font-semibold">Order #</th><th className="text-left p-3 font-semibold">Customer</th><th className="text-left p-3 font-semibold">Shop</th><th className="text-left p-3 font-semibold">Amount</th><th className="text-left p-3 font-semibold">Status</th><th className="text-left p-3 font-semibold">Payment</th><th className="text-left p-3 font-semibold">Date</th><th className="text-left p-3 font-semibold">Actions</th></tr></thead>
+                      <tbody>{allOrders.map(order => (
+                        <tr key={order.id} className="border-b hover:bg-gray-50 transition-colors">
+                          <td className="p-3 font-medium text-primary">{order.order_number}</td>
+                          <td className="p-3">{order.customer}</td>
+                          <td className="p-3">{order.shop}</td>
+                          <td className="p-3 font-medium">{formatCurrency(order.total_amount)}</td>
+                          <td className="p-3"><Badge className={`${getStatusColor(order.status)} capitalize`}>{order.status.replace(/_/g, ' ')}</Badge></td>
+                          <td className="p-3"><Badge className={`${getStatusColor(order.payment_status)} capitalize`}>{order.payment_status}</Badge></td>
+                          <td className="p-3 text-gray-500">{formatDate(order.created_at)}</td>
+                          <td className="p-3"><div className="flex gap-1"><Button size="sm" variant="outline" onClick={() => openEditOrder(order)}><Edit className="w-3 h-3" /></Button><Button size="sm" variant="destructive" onClick={() => handleDeleteOrder(order.id)}><Trash2 className="w-3 h-3" /></Button></div></td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent></Card>
           </TabsContent>
 
           {/* Users Tab */}
@@ -566,55 +583,55 @@ const AdminDashboard = () => {
                 </Select>
               </div>
             </CardHeader><CardContent>
-              {allReviews.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <Star className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                  <p>No reviews found</p>
-                </div>
-              ) : (
-              <div className="space-y-4">
-                {allReviews.map(review => (
-                  <div key={review.id} className="p-4 border rounded-lg hover:bg-gray-50">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="font-medium">{review.customer_name}</span>
-                          <div className="flex items-center gap-1">
-                            {[...Array(5)].map((_, i) => (
-                              <Star key={i} className={`w-4 h-4 ${i < review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
-                            ))}
-                          </div>
-                          {!review.is_approved && <Badge variant="outline" className="text-red-600">Hidden</Badge>}
-                          {review.is_verified && <Badge className="bg-green-100 text-green-800">Verified</Badge>}
-                        </div>
-                        {review.title && <p className="font-medium text-sm mb-1">{review.title}</p>}
-                        <p className="text-sm text-gray-600 mb-2">{review.comment}</p>
-                        <div className="flex items-center gap-4 text-xs text-gray-500">
-                          {review.product && <span>Product: {review.product}</span>}
-                          {review.shop && <span>Shop: {review.shop}</span>}
-                          <span>{new Date(review.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                        </div>
-                      </div>
-                      <div className="flex gap-1 ml-4">
-                        {review.is_approved ? (
-                          <Button size="sm" variant="outline" onClick={() => handleApproveReview(review.id, false)} title="Hide review">
-                            <XCircle className="w-3 h-3" />
-                          </Button>
-                        ) : (
-                          <Button size="sm" variant="outline" className="text-green-600" onClick={() => handleApproveReview(review.id, true)} title="Approve review">
-                            <CheckCircle className="w-3 h-3" />
-                          </Button>
-                        )}
-                        <Button size="sm" variant="destructive" onClick={() => handleDeleteReview(review.id)}>
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    </div>
+                {allReviews.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Star className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <p>No reviews found</p>
                   </div>
-                ))}
-              </div>
-              )}
-            </CardContent></Card>
+                ) : (
+                  <div className="space-y-4">
+                    {allReviews.map(review => (
+                      <div key={review.id} className="p-4 border rounded-lg hover:bg-gray-50">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="font-medium">{review.customer_name}</span>
+                              <div className="flex items-center gap-1">
+                                {[...Array(5)].map((_, i) => (
+                                  <Star key={i} className={`w-4 h-4 ${i < review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
+                                ))}
+                              </div>
+                              {!review.is_approved && <Badge variant="outline" className="text-red-600">Hidden</Badge>}
+                              {review.is_verified && <Badge className="bg-green-100 text-green-800">Verified</Badge>}
+                            </div>
+                            {review.title && <p className="font-medium text-sm mb-1">{review.title}</p>}
+                            <p className="text-sm text-gray-600 mb-2">{review.comment}</p>
+                            <div className="flex items-center gap-4 text-xs text-gray-500">
+                              {review.product && <span>Product: {review.product}</span>}
+                              {review.shop && <span>Shop: {review.shop}</span>}
+                              <span>{new Date(review.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                            </div>
+                          </div>
+                          <div className="flex gap-1 ml-4">
+                            {review.is_approved ? (
+                              <Button size="sm" variant="outline" onClick={() => handleApproveReview(review.id, false)} title="Hide review">
+                                <XCircle className="w-3 h-3" />
+                              </Button>
+                            ) : (
+                              <Button size="sm" variant="outline" className="text-green-600" onClick={() => handleApproveReview(review.id, true)} title="Approve review">
+                                <CheckCircle className="w-3 h-3" />
+                              </Button>
+                            )}
+                            <Button size="sm" variant="destructive" onClick={() => handleDeleteReview(review.id)}>
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent></Card>
           </TabsContent>
 
           {/* Reports Tab */}
@@ -668,7 +685,7 @@ const AdminDashboard = () => {
                 <CardContent>
                   <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <Button variant="outline" className="h-auto py-4 flex flex-col items-center gap-2" onClick={() => {
-                      const csvContent = "Order Number,Customer,Shop,Amount,Status,Date\n" + 
+                      const csvContent = "Order Number,Customer,Shop,Amount,Status,Date\n" +
                         allOrders.map(o => `${o.order_number},${o.customer},${o.shop},${o.total_amount},${o.status},${o.created_at}`).join("\n");
                       const blob = new Blob([csvContent], { type: 'text/csv' });
                       const url = URL.createObjectURL(blob);
@@ -683,7 +700,7 @@ const AdminDashboard = () => {
                       <span className="text-xs text-muted-foreground">Export all orders</span>
                     </Button>
                     <Button variant="outline" className="h-auto py-4 flex flex-col items-center gap-2" onClick={() => {
-                      const csvContent = "Username,Email,Name,Type,Status,Joined\n" + 
+                      const csvContent = "Username,Email,Name,Type,Status,Joined\n" +
                         allUsers.map(u => `${u.username},${u.email},${u.full_name},${u.user_type},${u.is_active ? 'Active' : 'Inactive'},${u.created_at}`).join("\n");
                       const blob = new Blob([csvContent], { type: 'text/csv' });
                       const url = URL.createObjectURL(blob);
@@ -698,7 +715,7 @@ const AdminDashboard = () => {
                       <span className="text-xs text-muted-foreground">Export all users</span>
                     </Button>
                     <Button variant="outline" className="h-auto py-4 flex flex-col items-center gap-2" onClick={() => {
-                      const csvContent = "Name,Owner,Phone,Address,Rating,Status\n" + 
+                      const csvContent = "Name,Owner,Phone,Address,Rating,Status\n" +
                         allShops.map(s => `${s.name},${s.owner},${s.phone},"${s.address}",${s.average_rating},${s.status}`).join("\n");
                       const blob = new Blob([csvContent], { type: 'text/csv' });
                       const url = URL.createObjectURL(blob);
@@ -713,7 +730,7 @@ const AdminDashboard = () => {
                       <span className="text-xs text-muted-foreground">Export all shops</span>
                     </Button>
                     <Button variant="outline" className="h-auto py-4 flex flex-col items-center gap-2" onClick={() => {
-                      const csvContent = "Name,Shop,Category,Price,Stock,Status\n" + 
+                      const csvContent = "Name,Shop,Category,Price,Stock,Status\n" +
                         allProducts.map(p => `${p.name},${p.shop},${p.category || '-'},${p.price},${p.stock_quantity},${p.status}`).join("\n");
                       const blob = new Blob([csvContent], { type: 'text/csv' });
                       const url = URL.createObjectURL(blob);
@@ -789,6 +806,42 @@ const AdminDashboard = () => {
             </div>
           </TabsContent>
 
+          {/* Locations Tab - Shop Overview Map */}
+          <TabsContent value="locations">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><MapPin className="w-5 h-5" /> All Shop Locations</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <MapComponentPlaceholder />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Shop Locations Summary</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid sm:grid-cols-3 gap-4">
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                      <p className="text-sm text-green-600 font-medium">With Location</p>
+                      <p className="text-2xl font-bold text-green-700">{allShops.filter(s => s.latitude && s.longitude).length}</p>
+                    </div>
+                    <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                      <p className="text-sm text-orange-600 font-medium">Without Location</p>
+                      <p className="text-2xl font-bold text-orange-700">{allShops.filter(s => !s.latitude || !s.longitude).length}</p>
+                    </div>
+                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <p className="text-sm text-blue-600 font-medium">Total Shops</p>
+                      <p className="text-2xl font-bold text-blue-700">{allShops.length}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
           {/* Approvals Tab */}
           <TabsContent value="approvals">
             <Card><CardHeader><CardTitle>Pending Shopkeeper Approvals</CardTitle></CardHeader><CardContent>
@@ -824,18 +877,18 @@ const AdminDashboard = () => {
         <DialogContent><DialogHeader><DialogTitle>{editingItem ? 'Edit User' : 'Add User'}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>Username</Label><Input value={userForm.username} onChange={(e) => setUserForm({...userForm, username: e.target.value})} disabled={!!editingItem} /></div>
-              <div><Label>Email</Label><Input type="email" value={userForm.email} onChange={(e) => setUserForm({...userForm, email: e.target.value})} /></div>
+              <div><Label>Username</Label><Input value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} disabled={!!editingItem} /></div>
+              <div><Label>Email</Label><Input type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>First Name</Label><Input value={userForm.first_name} onChange={(e) => setUserForm({...userForm, first_name: e.target.value})} /></div>
-              <div><Label>Last Name</Label><Input value={userForm.last_name} onChange={(e) => setUserForm({...userForm, last_name: e.target.value})} /></div>
+              <div><Label>First Name</Label><Input value={userForm.first_name} onChange={(e) => setUserForm({ ...userForm, first_name: e.target.value })} /></div>
+              <div><Label>Last Name</Label><Input value={userForm.last_name} onChange={(e) => setUserForm({ ...userForm, last_name: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>User Type</Label><Select value={userForm.user_type} onValueChange={(v) => setUserForm({...userForm, user_type: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="customer">Customer</SelectItem><SelectItem value="shopkeeper">Shopkeeper</SelectItem><SelectItem value="admin">Admin</SelectItem></SelectContent></Select></div>
-              <div><Label>Phone</Label><Input value={userForm.phone_number} onChange={(e) => setUserForm({...userForm, phone_number: e.target.value})} /></div>
+              <div><Label>User Type</Label><Select value={userForm.user_type} onValueChange={(v) => setUserForm({ ...userForm, user_type: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="customer">Customer</SelectItem><SelectItem value="shopkeeper">Shopkeeper</SelectItem><SelectItem value="admin">Admin</SelectItem></SelectContent></Select></div>
+              <div><Label>Phone</Label><Input value={userForm.phone_number} onChange={(e) => setUserForm({ ...userForm, phone_number: e.target.value })} /></div>
             </div>
-            <div className="flex items-center gap-2"><input type="checkbox" checked={userForm.is_active} onChange={(e) => setUserForm({...userForm, is_active: e.target.checked})} /><Label>Active</Label></div>
+            <div className="flex items-center gap-2"><input type="checkbox" checked={userForm.is_active} onChange={(e) => setUserForm({ ...userForm, is_active: e.target.checked })} /><Label>Active</Label></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setShowUserDialog(false)}>Cancel</Button><Button onClick={handleSaveUser} disabled={isSaving}>{isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Save</Button></DialogFooter>
         </DialogContent>
@@ -845,14 +898,14 @@ const AdminDashboard = () => {
       <Dialog open={showShopDialog} onOpenChange={setShowShopDialog}>
         <DialogContent><DialogHeader><DialogTitle>Edit Shop</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div><Label>Name</Label><Input value={shopForm.name} onChange={(e) => setShopForm({...shopForm, name: e.target.value})} /></div>
-            <div><Label>Description</Label><Input value={shopForm.description} onChange={(e) => setShopForm({...shopForm, description: e.target.value})} /></div>
+            <div><Label>Name</Label><Input value={shopForm.name} onChange={(e) => setShopForm({ ...shopForm, name: e.target.value })} /></div>
+            <div><Label>Description</Label><Input value={shopForm.description} onChange={(e) => setShopForm({ ...shopForm, description: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>Phone</Label><Input value={shopForm.phone} onChange={(e) => setShopForm({...shopForm, phone: e.target.value})} /></div>
-              <div><Label>Email</Label><Input value={shopForm.email} onChange={(e) => setShopForm({...shopForm, email: e.target.value})} /></div>
+              <div><Label>Phone</Label><Input value={shopForm.phone} onChange={(e) => setShopForm({ ...shopForm, phone: e.target.value })} /></div>
+              <div><Label>Email</Label><Input value={shopForm.email} onChange={(e) => setShopForm({ ...shopForm, email: e.target.value })} /></div>
             </div>
-            <div><Label>Address</Label><Input value={shopForm.address} onChange={(e) => setShopForm({...shopForm, address: e.target.value})} /></div>
-            <div><Label>Status</Label><Select value={shopForm.status} onValueChange={(v) => setShopForm({...shopForm, status: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem><SelectItem value="suspended">Suspended</SelectItem></SelectContent></Select></div>
+            <div><Label>Address</Label><Input value={shopForm.address} onChange={(e) => setShopForm({ ...shopForm, address: e.target.value })} /></div>
+            <div><Label>Status</Label><Select value={shopForm.status} onValueChange={(v) => setShopForm({ ...shopForm, status: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem><SelectItem value="suspended">Suspended</SelectItem></SelectContent></Select></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setShowShopDialog(false)}>Cancel</Button><Button onClick={handleSaveShop} disabled={isSaving}>{isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Save</Button></DialogFooter>
         </DialogContent>
@@ -862,8 +915,8 @@ const AdminDashboard = () => {
       <Dialog open={showOrderDialog} onOpenChange={setShowOrderDialog}>
         <DialogContent><DialogHeader><DialogTitle>Edit Order</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div><Label>Order Status</Label><Select value={orderForm.status} onValueChange={(v) => setOrderForm({...orderForm, status: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="pending">Pending</SelectItem><SelectItem value="confirmed">Confirmed</SelectItem><SelectItem value="preparing">Preparing</SelectItem><SelectItem value="ready">Ready</SelectItem><SelectItem value="out_for_delivery">Out for Delivery</SelectItem><SelectItem value="delivered">Delivered</SelectItem><SelectItem value="cancelled">Cancelled</SelectItem></SelectContent></Select></div>
-            <div><Label>Payment Status</Label><Select value={orderForm.payment_status} onValueChange={(v) => setOrderForm({...orderForm, payment_status: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="pending">Pending</SelectItem><SelectItem value="paid">Paid</SelectItem><SelectItem value="failed">Failed</SelectItem><SelectItem value="refunded">Refunded</SelectItem></SelectContent></Select></div>
+            <div><Label>Order Status</Label><Select value={orderForm.status} onValueChange={(v) => setOrderForm({ ...orderForm, status: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="pending">Pending</SelectItem><SelectItem value="confirmed">Confirmed</SelectItem><SelectItem value="preparing">Preparing</SelectItem><SelectItem value="ready">Ready</SelectItem><SelectItem value="out_for_delivery">Out for Delivery</SelectItem><SelectItem value="delivered">Delivered</SelectItem><SelectItem value="cancelled">Cancelled</SelectItem></SelectContent></Select></div>
+            <div><Label>Payment Status</Label><Select value={orderForm.payment_status} onValueChange={(v) => setOrderForm({ ...orderForm, payment_status: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="pending">Pending</SelectItem><SelectItem value="paid">Paid</SelectItem><SelectItem value="failed">Failed</SelectItem><SelectItem value="refunded">Refunded</SelectItem></SelectContent></Select></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setShowOrderDialog(false)}>Cancel</Button><Button onClick={handleSaveOrder} disabled={isSaving}>{isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Save</Button></DialogFooter>
         </DialogContent>
@@ -873,15 +926,15 @@ const AdminDashboard = () => {
       <Dialog open={showProductDialog} onOpenChange={setShowProductDialog}>
         <DialogContent><DialogHeader><DialogTitle>Edit Product</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div><Label>Name</Label><Input value={productForm.name} onChange={(e) => setProductForm({...productForm, name: e.target.value})} /></div>
-            <div><Label>Description</Label><Input value={productForm.description} onChange={(e) => setProductForm({...productForm, description: e.target.value})} /></div>
+            <div><Label>Name</Label><Input value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} /></div>
+            <div><Label>Description</Label><Input value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>Price</Label><Input type="number" value={productForm.price} onChange={(e) => setProductForm({...productForm, price: e.target.value})} /></div>
-              <div><Label>Stock</Label><Input type="number" value={productForm.stock_quantity} onChange={(e) => setProductForm({...productForm, stock_quantity: e.target.value})} /></div>
+              <div><Label>Price</Label><Input type="number" value={productForm.price} onChange={(e) => setProductForm({ ...productForm, price: e.target.value })} /></div>
+              <div><Label>Stock</Label><Input type="number" value={productForm.stock_quantity} onChange={(e) => setProductForm({ ...productForm, stock_quantity: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>Status</Label><Select value={productForm.status} onValueChange={(v) => setProductForm({...productForm, status: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="available">Available</SelectItem><SelectItem value="out_of_stock">Out of Stock</SelectItem><SelectItem value="discontinued">Discontinued</SelectItem></SelectContent></Select></div>
-              <div><Label>Category</Label><Select value={productForm.category_id} onValueChange={(v) => setProductForm({...productForm, category_id: v})}><SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger><SelectContent>{categories.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+              <div><Label>Status</Label><Select value={productForm.status} onValueChange={(v) => setProductForm({ ...productForm, status: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="available">Available</SelectItem><SelectItem value="out_of_stock">Out of Stock</SelectItem><SelectItem value="discontinued">Discontinued</SelectItem></SelectContent></Select></div>
+              <div><Label>Category</Label><Select value={productForm.category_id} onValueChange={(v) => setProductForm({ ...productForm, category_id: v })}><SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger><SelectContent>{categories.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent></Select></div>
             </div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setShowProductDialog(false)}>Cancel</Button><Button onClick={handleSaveProduct} disabled={isSaving}>{isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Save</Button></DialogFooter>

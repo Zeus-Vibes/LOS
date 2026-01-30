@@ -19,6 +19,11 @@ urlpatterns = [
     path('profile/change-password/', views.change_password, name='change_password'),
     path('profile/delete/', views.delete_account, name='delete_account'),
     
+    # Notifications
+    path('notifications/', views.list_notifications, name='list_notifications'),
+    path('notifications/<int:notification_id>/read/', views.mark_notification_read, name='mark_notification_read'),
+    path('notifications/read-all/', views.mark_all_notifications_read, name='mark_all_notifications_read'),
+    
     # Dashboard
     path('dashboard/', views.user_dashboard, name='user_dashboard'),
     

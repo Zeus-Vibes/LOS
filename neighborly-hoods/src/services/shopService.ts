@@ -25,7 +25,9 @@ export interface Shop {
   latitude: number | null;
   longitude: number | null;
   logo: string | null;
+  logo_base64?: string | null;
   banner_image: string | null;
+  banner_base64?: string | null;
   status: 'active' | 'inactive' | 'suspended';
   average_rating: number;
   total_reviews: number;
@@ -57,6 +59,7 @@ export interface Product {
   weight: number | null;
   dimensions: string;
   image: string | null;
+  image_base64: string | null;  // Base64 image stored in database
   status: 'available' | 'out_of_stock' | 'discontinued';
   average_rating: number;
   total_reviews: number;
@@ -170,6 +173,11 @@ const shopService = {
 
   async updateMyShop(data: Partial<Shop>): Promise<Shop> {
     const response = await api.patch<Shop>('/shops/my-shop/update/', data);
+    return response.data;
+  },
+
+  async updateShopLocation(shopId: number, latitude: number, longitude: number): Promise<{ message: string; latitude: string; longitude: string }> {
+    const response = await api.post(`/shops/shops/${shopId}/update_location/`, { latitude, longitude });
     return response.data;
   },
 

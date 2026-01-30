@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef, Suspense, lazy } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,16 +17,55 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { 
-  Store, ShoppingBag, Package, TrendingUp, Star, 
+import {
+  Store, ShoppingBag, Package, TrendingUp, Star,
   Plus, Settings, LogOut, Bell, DollarSign, Edit, Trash2,
   AlertCircle, ShieldCheck, ShieldAlert, ShieldX, Loader2,
-  BarChart3, FileText, Download, Camera, MessageSquare
+  BarChart3, FileText, Download, Camera, MessageSquare, Map as MapIcon, MapPin
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { getFullImageUrl } from "@/lib/utils";
 import shopService, { Product, Category, Review } from "@/services/shopService";
+import NotificationDropdown from "@/components/NotificationDropdown";
 import api from "@/lib/api";
+
+// Lazy load map components to avoid react-leaflet context errors
+/* 
+const MapComponent = lazy(() => import('@/components/MapComponent'));
+const LocationCapture = lazy(() => import('@/components/LocationCapture'));
+*/
+
+// DUMMY COMPONENTS FOR NOW
+const MapComponentPlaceholder = ({ height = '100%', shopInfo }: any) => (
+  <div style={{ height }} className="w-full bg-accent/50 flex flex-col items-center justify-center gap-4 p-8 text-center rounded-xl border">
+    <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
+      <MapIcon className="w-8 h-8" />
+    </div>
+    <div>
+      <h3 className="font-semibold text-lg">Map View Temporarily Disabled</h3>
+      <p className="text-muted-foreground">We're working on making our map integration even better. Check back soon!</p>
+    </div>
+    <div className="flex gap-4">
+      <div className="px-4 py-2 bg-background/80 rounded-lg border text-sm">
+        <span className="text-muted-foreground">Lat:</span> {shopInfo?.latitude || 'Not set'}
+      </div>
+      <div className="px-4 py-2 bg-background/80 rounded-lg border text-sm">
+        <span className="text-muted-foreground">Lng:</span> {shopInfo?.longitude || 'Not set'}
+      </div>
+    </div>
+  </div>
+);
+
+const LocationCapturePlaceholder = () => (
+  <div className="p-12 border-2 border-dashed border-muted rounded-xl bg-accent/50 text-center space-y-3 my-6">
+    <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mx-auto text-muted-foreground">
+      <MapIcon className="w-6 h-6" />
+    </div>
+    <p className="font-medium text-muted-foreground">Location integration is temporarily disabled</p>
+    <p className="text-sm text-muted-foreground max-w-sm mx-auto">This feature is being updated to improve performance. Your coordinates are still saved in the database.</p>
+  </div>
+);
 
 interface ShopkeeperProfile {
   id: number;
@@ -44,6 +83,8 @@ interface ShopInfo {
   status: string;
   average_rating: number;
   total_reviews: number;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 interface ShopStats {
@@ -66,10 +107,21 @@ interface Order {
 }
 
 const ShopkeeperDashboard = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
-  
+
+  // Determine which tab to show based on URL
+  const getTabFromPath = () => {
+    if (location.pathname.includes('/orders')) return 'orders';
+    if (location.pathname.includes('/products')) return 'products';
+    if (location.pathname.includes('/settings')) return 'settings';
+    return 'orders'; // default tab
+  };
+
+  const [activeTab, setActiveTab] = useState(getTabFromPath());
+
   const [stats, setStats] = useState<ShopStats | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -77,7 +129,7 @@ const ShopkeeperDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [shopInfo, setShopInfo] = useState<ShopInfo | null>(null);
   const [shopkeeperProfile, setShopkeeperProfile] = useState<ShopkeeperProfile | null>(null);
-  
+
   // Product form state
   const [showProductDialog, setShowProductDialog] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -92,7 +144,7 @@ const ShopkeeperDashboard = () => {
     status: 'available'
   });
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // New state for reviews, analytics, and notifications
   const [reviews, setReviews] = useState<Review[]>([]);
   const [analytics, setAnalytics] = useState<any>(null);
@@ -100,13 +152,28 @@ const ShopkeeperDashboard = () => {
   const [productImage, setProductImage] = useState<string | null>(null);
   const productImageRef = useRef<HTMLInputElement>(null);
 
+  // Shop branding states
+  const [shopBanner, setShopBanner] = useState<string | null>(null);
+  const [shopLogo, setShopLogo] = useState<string | null>(null);
+  const [isSavingShop, setIsSavingShop] = useState(false);
+  const bannerImageRef = useRef<HTMLInputElement>(null);
+  const logoImageRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
+    // Wait for auth to finish loading before checking user
+    if (authLoading) return;
+
     if (!user || user.user_type !== 'shopkeeper') {
       navigate('/login');
       return;
     }
     fetchDashboardData();
-  }, [user]);
+  }, [user, authLoading]);
+
+  // Sync active tab with URL path changes
+  useEffect(() => {
+    setActiveTab(getTabFromPath());
+  }, [location.pathname]);
 
   const fetchDashboardData = async () => {
     setIsLoading(true);
@@ -127,6 +194,9 @@ const ShopkeeperDashboard = () => {
       try {
         const shop = await shopService.getMyShop();
         setShopInfo(shop);
+        // Load existing shop images
+        if (shop.banner_base64) setShopBanner(shop.banner_base64);
+        if (shop.logo_base64) setShopLogo(shop.logo_base64);
       } catch (e) {
         console.log('No shop found yet');
       }
@@ -205,6 +275,58 @@ const ShopkeeperDashboard = () => {
     }
   };
 
+  const handleBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast({ title: "Error", description: "Image must be less than 5MB", variant: "destructive" });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setShopBanner(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        toast({ title: "Error", description: "Logo must be less than 2MB", variant: "destructive" });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setShopLogo(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveShopBranding = async () => {
+    if (!shopInfo) return;
+
+    setIsSavingShop(true);
+    try {
+      await shopService.updateMyShop({
+        banner_base64: shopBanner,
+        logo_base64: shopLogo,
+      });
+      toast({ title: "Success", description: "Shop branding updated successfully" });
+      fetchDashboardData();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.error || "Failed to update shop branding",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSavingShop(false);
+    }
+  };
+
   const exportToCSV = (data: any[], filename: string) => {
     if (!data.length) {
       toast({ title: "No data", description: "No data to export", variant: "destructive" });
@@ -215,7 +337,7 @@ const ShopkeeperDashboard = () => {
       headers.join(','),
       ...data.map(row => headers.map(h => JSON.stringify(row[h] ?? '')).join(','))
     ].join('\n');
-    
+
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -254,7 +376,7 @@ const ShopkeeperDashboard = () => {
       brand: product.brand || '',
       status: product.status
     });
-    setProductImage(product.image || null);
+    setProductImage(product.image_base64 || product.image || null);
     setShowProductDialog(true);
   };
 
@@ -274,7 +396,8 @@ const ShopkeeperDashboard = () => {
         category: parseInt(productForm.category),
         stock_quantity: parseInt(productForm.stock_quantity),
         brand: productForm.brand,
-        status: productForm.status as 'available' | 'out_of_stock' | 'discontinued'
+        status: productForm.status as 'available' | 'out_of_stock' | 'discontinued',
+        image_base64: productImage,  // Send base64 image to backend
       };
 
       if (editingProduct) {
@@ -288,10 +411,10 @@ const ShopkeeperDashboard = () => {
       setShowProductDialog(false);
       fetchDashboardData();
     } catch (error: any) {
-      toast({ 
-        title: "Error", 
-        description: error.response?.data?.error || "Failed to save product", 
-        variant: "destructive" 
+      toast({
+        title: "Error",
+        description: error.response?.data?.error || "Failed to save product",
+        variant: "destructive"
       });
     } finally {
       setIsSaving(false);
@@ -300,7 +423,7 @@ const ShopkeeperDashboard = () => {
 
   const handleDeleteProduct = async (productId: number) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
-    
+
     try {
       await shopService.deleteProduct(productId);
       toast({ title: "Success", description: "Product deleted" });
@@ -347,7 +470,7 @@ const ShopkeeperDashboard = () => {
 
   const isApproved = shopkeeperProfile?.verification_status === 'approved';
 
-  if (isLoading) {
+  if (isLoading || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -412,9 +535,16 @@ const ShopkeeperDashboard = () => {
                   </div>
                 </PopoverContent>
               </Popover>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white text-sm font-medium">
-                  {user?.first_name?.[0] || 'S'}
+              <NotificationDropdown />
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full overflow-hidden border border-border shadow-sm">
+                  {user?.profile_picture ? (
+                    <img src={getFullImageUrl(user.profile_picture) || ''} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white text-sm font-bold">
+                      {user?.first_name?.[0] || user?.username?.[0] || 'S'}
+                    </div>
+                  )}
                 </div>
                 <span className="text-sm font-medium hidden sm:block">{user?.first_name}</span>
               </div>
@@ -480,7 +610,7 @@ const ShopkeeperDashboard = () => {
                       {shopkeeperProfile?.verification_status === 'rejected' ? 'Verification Rejected' : 'Verification Pending'}
                     </h3>
                     <p className={`text-sm ${shopkeeperProfile?.verification_status === 'rejected' ? 'text-red-700' : 'text-yellow-700'}`}>
-                      {shopkeeperProfile?.verification_status === 'rejected' 
+                      {shopkeeperProfile?.verification_status === 'rejected'
                         ? 'Your shop verification was rejected. Please contact support.'
                         : 'Your shop is under review. You can add products once approved.'}
                     </p>
@@ -551,14 +681,20 @@ const ShopkeeperDashboard = () => {
               </Card>
             </div>
 
+            {/* Location Settings */}
+            {isApproved && shopInfo && (
+              <LocationCapturePlaceholder />
+            )}
+
             {/* Tabs */}
-            <Tabs defaultValue="orders" className="space-y-4">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
               <TabsList>
                 <TabsTrigger value="orders">Orders</TabsTrigger>
                 <TabsTrigger value="products">Products</TabsTrigger>
-                <TabsTrigger value="analytics">Analytics</TabsTrigger>
-                <TabsTrigger value="reviews">Reviews</TabsTrigger>
-                <TabsTrigger value="reports">Reports</TabsTrigger>
+                <TabsTrigger value="analytics" className="px-6 py-2">Analytics</TabsTrigger>
+                <TabsTrigger value="reviews" className="px-6 py-2">Reviews</TabsTrigger>
+                <TabsTrigger value="shop-map" className="px-6 py-2">Shop Map</TabsTrigger>
+                <TabsTrigger value="settings" className="px-6 py-2">Settings</TabsTrigger>
               </TabsList>
 
               <TabsContent value="orders">
@@ -626,8 +762,8 @@ const ShopkeeperDashboard = () => {
                       {products.map((product) => (
                         <div key={product.id} className="border rounded-lg p-4 hover:shadow-md">
                           <div className="aspect-square rounded-lg bg-accent mb-3 overflow-hidden">
-                            {product.image ? (
-                              <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                            {(product.image_base64 || product.image) ? (
+                              <img src={product.image_base64 || getFullImageUrl(product.image) || ''} alt={product.name} className="w-full h-full object-cover" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center">
                                 <Package className="w-8 h-8 text-muted-foreground" />
@@ -677,7 +813,7 @@ const ShopkeeperDashboard = () => {
                       <p className="text-2xl font-bold text-purple-800">₹{analytics?.average_order_value?.toFixed(0) || 0}</p>
                     </div>
                   </div>
-                  
+
                   <h3 className="font-semibold mb-3">Orders by Status</h3>
                   <div className="grid sm:grid-cols-4 gap-3 mb-6">
                     {analytics?.orders_by_status?.map((item: any) => (
@@ -703,6 +839,52 @@ const ShopkeeperDashboard = () => {
                     </div>
                   ) : (
                     <p className="text-muted-foreground text-center py-4">No sales data yet</p>
+                  )}
+                </Card>
+              </TabsContent>
+
+              {/* Shop Map Tab */}
+              <TabsContent value="shop-map">
+                <Card className="p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="font-display text-xl font-semibold flex items-center gap-2">
+                        <MapIcon className="w-5 h-5" /> Shop Location
+                      </h2>
+                      <p className="text-sm text-muted-foreground">This is how customers see your shop on the map</p>
+                    </div>
+                  </div>
+
+                  {shopInfo?.latitude && shopInfo?.longitude ? (
+                    <div className="space-y-4">
+                      <div className="h-[400px] rounded-xl overflow-hidden border">
+                        <MapComponentPlaceholder height="100%" shopInfo={shopInfo} />
+                      </div>
+                      <div className="p-4 bg-primary/5 rounded-lg border border-primary/10 flex items-start gap-3">
+                        <MapPin className="w-5 h-5 text-primary mt-0.5" />
+                        <div>
+                          <p className="font-medium">{shopInfo.name}</p>
+                          <p className="text-sm text-muted-foreground">{shopkeeperProfile?.business_address}</p>
+                          <p className="text-xs text-muted-foreground mt-1">Coordinates: {Number(shopInfo.latitude).toFixed(6)}, {Number(shopInfo.longitude).toFixed(6)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 bg-orange-50 rounded-xl border border-orange-100">
+                      <MapPin className="w-12 h-12 text-orange-400 mx-auto mb-4" />
+                      <h3 className="font-semibold text-lg text-orange-900">No Location Defined</h3>
+                      <p className="text-orange-700 mb-6 max-w-md mx-auto">
+                        Your shop location is not set on the map. Customers won't be able to find you through the "Nearby Shops" feature.
+                      </p>
+                      <Button onClick={() => {
+                        // Switch to settings tab
+                        const tabsList = document.querySelector('[role="tablist"]');
+                        const settingsTab = tabsList?.querySelector('[value="settings"]') as HTMLElement;
+                        settingsTab?.click();
+                      }}>
+                        Go to Settings to Set Location
+                      </Button>
+                    </div>
                   )}
                 </Card>
               </TabsContent>
@@ -747,59 +929,122 @@ const ShopkeeperDashboard = () => {
                 </Card>
               </TabsContent>
 
-              {/* Reports Tab */}
               <TabsContent value="reports">
                 <Card className="p-6">
                   <h2 className="font-display text-xl font-semibold mb-4 flex items-center gap-2">
                     <FileText className="w-5 h-5" />Business Reports
                   </h2>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="p-4 border rounded-lg">
-                      <h3 className="font-medium mb-2">Orders Report</h3>
-                      <p className="text-sm text-muted-foreground mb-4">Export all orders data</p>
-                      <Button variant="outline" onClick={() => exportToCSV(orders.map(o => ({
-                        order_id: o.id,
-                        customer: o.customer_name,
-                        amount: o.total_amount,
-                        status: o.status,
-                        date: o.created_at
-                      })), 'orders')}>
-                        <Download className="w-4 h-4 mr-2" />Export Orders
+                    <div className="p-4 border rounded-lg text-center">
+                      <ShoppingBag className="w-8 h-8 mx-auto mb-2 text-primary" />
+                      <h3 className="font-medium mb-1">Orders Report</h3>
+                      <p className="text-sm text-muted-foreground mb-4">Detailed list of all orders</p>
+                      <Button variant="outline" className="w-full" onClick={() => exportToCSV(orders, 'orders')}>
+                        <Download className="w-4 h-4 mr-2" /> Download CSV
                       </Button>
                     </div>
-                    <div className="p-4 border rounded-lg">
-                      <h3 className="font-medium mb-2">Products Report</h3>
-                      <p className="text-sm text-muted-foreground mb-4">Export all products data</p>
-                      <Button variant="outline" onClick={() => exportToCSV(products.map(p => ({
-                        name: p.name,
-                        category: p.category_name,
-                        price: p.price,
-                        stock: p.stock_quantity,
-                        status: p.status
-                      })), 'products')}>
-                        <Download className="w-4 h-4 mr-2" />Export Products
-                      </Button>
-                    </div>
-                    <div className="p-4 border rounded-lg">
-                      <h3 className="font-medium mb-2">Revenue Report</h3>
-                      <p className="text-sm text-muted-foreground mb-4">Export revenue analytics</p>
-                      <Button variant="outline" onClick={() => exportToCSV(analytics?.monthly_revenue || [], 'revenue')}>
-                        <Download className="w-4 h-4 mr-2" />Export Revenue
-                      </Button>
-                    </div>
-                    <div className="p-4 border rounded-lg">
-                      <h3 className="font-medium mb-2">Reviews Report</h3>
-                      <p className="text-sm text-muted-foreground mb-4">Export customer reviews</p>
-                      <Button variant="outline" onClick={() => exportToCSV(reviews.map(r => ({
-                        customer: r.customer_name,
-                        rating: r.rating,
-                        comment: r.comment,
-                        date: r.created_at
-                      })), 'reviews')}>
-                        <Download className="w-4 h-4 mr-2" />Export Reviews
+                    <div className="p-4 border rounded-lg text-center">
+                      <Package className="w-8 h-8 mx-auto mb-2 text-primary" />
+                      <h3 className="font-medium mb-1">Products Report</h3>
+                      <p className="text-sm text-muted-foreground mb-4">Inventory and pricing details</p>
+                      <Button variant="outline" className="w-full" onClick={() => exportToCSV(products, 'products')}>
+                        <Download className="w-4 h-4 mr-2" /> Download CSV
                       </Button>
                     </div>
                   </div>
+                </Card>
+              </TabsContent>
+
+              {/* Settings Tab */}
+              <TabsContent value="settings">
+                <Card className="p-6">
+                  <h2 className="font-display text-xl font-semibold mb-6 flex items-center gap-2">
+                    <Settings className="w-5 h-5" />Shop Settings
+                  </h2>
+                  {shopInfo && (
+                    <div className="space-y-8">
+                      {/* Shop Branding Section */}
+                      <div>
+                        <h3 className="font-medium mb-4">Shop Branding</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Upload a banner and logo to make your shop stand out in browse listings.
+                        </p>
+
+                        {/* Banner Upload */}
+                        <div className="mb-6">
+                          <Label className="text-sm font-medium mb-2 block">Shop Banner</Label>
+                          <p className="text-xs text-muted-foreground mb-3">Recommended size: 1200x400 pixels. This appears at the top of your shop page.</p>
+                          <div className="relative">
+                            <div className="aspect-[3/1] rounded-xl border-2 border-dashed border-border overflow-hidden bg-accent/50 flex items-center justify-center">
+                              {shopBanner ? (
+                                <img src={shopBanner} alt="Shop Banner" className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="text-center p-4">
+                                  <Camera className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                                  <p className="text-sm text-muted-foreground">No banner uploaded</p>
+                                </div>
+                              )}
+                            </div>
+                            <div className="mt-3 flex gap-2">
+                              <Button type="button" variant="outline" size="sm" onClick={() => bannerImageRef.current?.click()}>
+                                <Camera className="w-4 h-4 mr-2" />{shopBanner ? 'Change Banner' : 'Upload Banner'}
+                              </Button>
+                              {shopBanner && (
+                                <Button type="button" variant="ghost" size="sm" onClick={() => setShopBanner(null)}>
+                                  Remove
+                                </Button>
+                              )}
+                            </div>
+                            <input ref={bannerImageRef} type="file" accept="image/*" onChange={handleBannerUpload} className="hidden" />
+                          </div>
+                        </div>
+
+                        {/* Logo Upload */}
+                        <div className="mb-6">
+                          <Label className="text-sm font-medium mb-2 block">Shop Logo</Label>
+                          <p className="text-xs text-muted-foreground mb-3">Recommended: Square image (200x200 pixels). Appears next to your shop name.</p>
+                          <div className="flex items-center gap-4">
+                            <div className="w-24 h-24 rounded-xl border-2 border-dashed border-border overflow-hidden bg-accent/50 flex items-center justify-center">
+                              {shopLogo ? (
+                                <img src={shopLogo} alt="Shop Logo" className="w-full h-full object-cover" />
+                              ) : (
+                                <Store className="w-8 h-8 text-muted-foreground" />
+                              )}
+                            </div>
+                            <div>
+                              <Button type="button" variant="outline" size="sm" onClick={() => logoImageRef.current?.click()}>
+                                <Camera className="w-4 h-4 mr-2" />{shopLogo ? 'Change Logo' : 'Upload Logo'}
+                              </Button>
+                              {shopLogo && (
+                                <Button type="button" variant="ghost" size="sm" className="ml-2" onClick={() => setShopLogo(null)}>
+                                  Remove
+                                </Button>
+                              )}
+                              <p className="text-xs text-muted-foreground mt-2">Max 2MB, JPG/PNG</p>
+                            </div>
+                            <input ref={logoImageRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                          </div>
+                        </div>
+
+                        {/* Save Button */}
+                        <Button onClick={handleSaveShopBranding} disabled={isSavingShop} className="w-full sm:w-auto">
+                          {isSavingShop ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                          Save Branding
+                        </Button>
+                      </div>
+
+                      <hr className="border-border" />
+
+                      {/* Location Section */}
+                      <div>
+                        <h3 className="font-medium mb-4">Location Capture</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Update your shop's map coordinates so customers can find you.
+                        </p>
+                        <LocationCapturePlaceholder />
+                      </div>
+                    </div>
+                  )}
                 </Card>
               </TabsContent>
             </Tabs>
@@ -817,25 +1062,25 @@ const ShopkeeperDashboard = () => {
           <div className="space-y-4">
             <div>
               <Label htmlFor="name">Product Name *</Label>
-              <Input id="name" value={productForm.name} onChange={(e) => setProductForm({...productForm, name: e.target.value})} />
+              <Input id="name" value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} />
             </div>
             <div>
               <Label htmlFor="description">Description</Label>
-              <Textarea id="description" value={productForm.description} onChange={(e) => setProductForm({...productForm, description: e.target.value})} />
+              <Textarea id="description" value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="price">Price (₹) *</Label>
-                <Input id="price" type="number" value={productForm.price} onChange={(e) => setProductForm({...productForm, price: e.target.value})} />
+                <Input id="price" type="number" value={productForm.price} onChange={(e) => setProductForm({ ...productForm, price: e.target.value })} />
               </div>
               <div>
                 <Label htmlFor="discount_price">Sale Price (₹)</Label>
-                <Input id="discount_price" type="number" value={productForm.discount_price} onChange={(e) => setProductForm({...productForm, discount_price: e.target.value})} />
+                <Input id="discount_price" type="number" value={productForm.discount_price} onChange={(e) => setProductForm({ ...productForm, discount_price: e.target.value })} />
               </div>
             </div>
             <div>
               <Label htmlFor="category">Category *</Label>
-              <Select value={productForm.category} onValueChange={(v) => setProductForm({...productForm, category: v})}>
+              <Select value={productForm.category} onValueChange={(v) => setProductForm({ ...productForm, category: v })}>
                 <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                 <SelectContent>
                   {categories.map((cat) => (
@@ -847,11 +1092,11 @@ const ShopkeeperDashboard = () => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="stock">Stock Quantity</Label>
-                <Input id="stock" type="number" value={productForm.stock_quantity} onChange={(e) => setProductForm({...productForm, stock_quantity: e.target.value})} />
+                <Input id="stock" type="number" value={productForm.stock_quantity} onChange={(e) => setProductForm({ ...productForm, stock_quantity: e.target.value })} />
               </div>
               <div>
                 <Label htmlFor="brand">Brand</Label>
-                <Input id="brand" value={productForm.brand} onChange={(e) => setProductForm({...productForm, brand: e.target.value})} />
+                <Input id="brand" value={productForm.brand} onChange={(e) => setProductForm({ ...productForm, brand: e.target.value })} />
               </div>
             </div>
             <div>

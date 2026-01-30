@@ -4,11 +4,11 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
-from .models import User, CustomerProfile, ShopkeeperProfile
+from .models import User, CustomerProfile, ShopkeeperProfile, Notification
 from .serializers import (
     UserRegistrationSerializer, UserLoginSerializer, UserSerializer,
     CustomerProfileSerializer, ShopkeeperProfileSerializer,
-    ShopkeeperRegistrationSerializer
+    ShopkeeperRegistrationSerializer, NotificationSerializer
 )
 
 @api_view(['POST'])
@@ -169,6 +169,15 @@ def approve_shopkeeper(request, shopkeeper_id):
         shopkeeper.user.is_verified = True
         shopkeeper.user.save()
         
+        # Create notification for the shopkeeper
+        Notification.objects.create(
+            user=shopkeeper.user,
+            notification_type='shop_approved',
+            title='Shop Approved!',
+            message=f'Congratulations! Your shop "{shopkeeper.business_name}" has been approved. You can now start selling.',
+            related_shop_id=shopkeeper.user.shops.first().id if shopkeeper.user.shops.exists() else None
+        )
+        
         return Response({
             'message': 'Shopkeeper approved successfully',
             'shopkeeper': ShopkeeperProfileSerializer(shopkeeper).data
@@ -198,6 +207,14 @@ def reject_shopkeeper(request, shopkeeper_id):
         
         shopkeeper.verification_status = 'rejected'
         shopkeeper.save()
+        
+        # Create notification for the shopkeeper
+        Notification.objects.create(
+            user=shopkeeper.user,
+            notification_type='shop_rejected',
+            title='Shop Application Update',
+            message=f'Your shop application for "{shopkeeper.business_name}" was not approved. Please contact support for more information.',
+        )
         
         return Response({
             'message': 'Shopkeeper rejected',
@@ -319,3 +336,51 @@ def delete_account(request):
     
     user.delete()
     return Response({'message': 'Account deleted successfully'})
+
+
+# ========== Notification API Views ==========
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_notifications(request):
+    """Get all notifications for the current user"""
+    notifications = Notification.objects.filter(user=request.user)
+    unread_count = notifications.filter(is_read=False).count()
+    serializer = NotificationSerializer(notifications[:50], many=True)  # Limit to 50 recent
+    return Response({
+        'notifications': serializer.data,
+        'unread_count': unread_count
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mark_notification_read(request, notification_id):
+    """Mark a single notification as read"""
+    try:
+        notification = Notification.objects.get(id=notification_id, user=request.user)
+        notification.is_read = True
+        notification.save()
+        return Response({'message': 'Notification marked as read'})
+    except Notification.DoesNotExist:
+        return Response({'error': 'Notification not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mark_all_notifications_read(request):
+    """Mark all notifications as read for the current user"""
+    Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+    return Response({'message': 'All notifications marked as read'})
+
+
+def create_notification(user, notification_type, title, message, related_order_id=None, related_shop_id=None):
+    """Helper function to create a notification"""
+    return Notification.objects.create(
+        user=user,
+        notification_type=notification_type,
+        title=title,
+        message=message,
+        related_order_id=related_order_id,
+        related_shop_id=related_shop_id
+    )

@@ -7,14 +7,33 @@ import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Search, MapPin, Filter, Grid3X3, List, Star, Clock, 
+import {
+  Search, MapPin, Filter, Grid3X3, List, Star, Clock,
   ChevronDown, X, ShoppingCart, Bell, Store, Loader2,
-  LayoutDashboard, Settings, LogOut, ShoppingBag, Package, Navigation
+  LayoutDashboard, Settings, LogOut, ShoppingBag, Package, Navigation, Map as MapIcon
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { lazy, Suspense } from "react";
+
+// Lazy load map component to avoid SSR issues
+// const MapComponent = lazy(() => import('@/components/MapComponent'));
+
+// DUMMY MAP COMPONENT
+const MapComponentPlaceholder = () => (
+  <div className="h-[500px] flex flex-col items-center justify-center bg-gray-50 rounded-xl text-center p-8 border-2 border-dashed border-gray-200">
+    <MapPin className="w-12 h-12 text-gray-300 mb-4" />
+    <h3 className="font-semibold text-lg text-gray-600">Map View Temporarily Disabled</h3>
+    <p className="text-gray-500 max-w-md mx-auto mt-2">
+      Shops are listed in the grid and list views. We're updating our map integration to bring you a better experience!
+    </p>
+    <div className="mt-4 p-3 bg-blue-50 text-blue-700 text-sm rounded-lg border border-blue-100 italic">
+      Tip: Use the "Grid" or "List" icons above to browse all available shops.
+    </div>
+  </div>
+);
 import { useToast } from "@/hooks/use-toast";
-import shopService, { Shop, Category, Product } from "@/services/shopService";
+import { getFullImageUrl } from "@/lib/utils";
+import shopService, { Shop, Product, Category } from "@/services/shopService";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,7 +47,7 @@ import { useNavigate } from "react-router-dom";
 const BrowseShops = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list" | "map">("grid");
   const [searchMode, setSearchMode] = useState<"shops" | "products">("shops");
   const [showFilters, setShowFilters] = useState(false);
   const [distanceRange, setDistanceRange] = useState([10]);
@@ -38,7 +57,7 @@ const BrowseShops = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationName, setLocationName] = useState("Your Area");
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const { user, isAuthenticated, logout } = useAuth();
@@ -50,7 +69,7 @@ const BrowseShops = () => {
     if (!shop) return false;
     if (shop.is_open_24_7) return true;
     if (!shop.opening_time || !shop.closing_time) return true;
-    
+
     try {
       const now = new Date();
       const currentTime = now.getHours() * 60 + now.getMinutes();
@@ -87,7 +106,7 @@ const BrowseShops = () => {
         async (position) => {
           const { latitude, longitude } = position.coords;
           setUserLocation({ lat: latitude, lng: longitude });
-          
+
           // Try to get location name using reverse geocoding
           try {
             const response = await fetch(
@@ -99,7 +118,7 @@ const BrowseShops = () => {
           } catch {
             setLocationName("Current Location");
           }
-          
+
           toast({ title: "Location updated", description: "Showing shops near you" });
           setIsGettingLocation(false);
         },
@@ -141,7 +160,7 @@ const BrowseShops = () => {
   const filteredShops = shops.filter((shop) => {
     const matchesSearch = shop.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       shop.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === "All" || 
+    const matchesCategory = selectedCategory === "All" ||
       shop.categories.some(c => c.name === selectedCategory);
     const matchesRating = minRating === null || shop.average_rating >= minRating;
     const matchesDistance = shop.delivery_radius <= distanceRange[0];
@@ -153,7 +172,7 @@ const BrowseShops = () => {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.brand?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === "All" || 
+    const matchesCategory = selectedCategory === "All" ||
       product.category_name === selectedCategory;
     const matchesRating = minRating === null || product.average_rating >= minRating;
     return matchesSearch && matchesCategory && matchesRating;
@@ -171,7 +190,7 @@ const BrowseShops = () => {
               <span className="font-display font-bold text-xl hidden sm:block">LOS</span>
             </Link>
 
-            <button 
+            <button
               onClick={getUserLocation}
               disabled={isGettingLocation}
               className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-accent transition-colors"
@@ -207,7 +226,7 @@ const BrowseShops = () => {
                   <ShoppingCart className="w-5 h-5" />
                 </Button>
               </Link>
-              
+
               {isAuthenticated && user ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -268,7 +287,7 @@ const BrowseShops = () => {
           <aside className="w-64 shrink-0 hidden lg:block">
             <Card className="p-4 sticky top-24">
               <h3 className="font-display font-semibold mb-4">Filters</h3>
-              
+
               <div className="mb-6">
                 <h4 className="text-sm font-medium mb-3">Categories</h4>
                 <div className="space-y-2">
@@ -276,9 +295,8 @@ const BrowseShops = () => {
                     <button
                       key={cat}
                       onClick={() => setSelectedCategory(cat)}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                        selectedCategory === cat ? "bg-primary text-primary-foreground" : "hover:bg-accent"
-                      }`}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${selectedCategory === cat ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+                        }`}
                     >
                       {cat}
                     </button>
@@ -297,7 +315,7 @@ const BrowseShops = () => {
                 <div className="space-y-2">
                   {[4, 3, 2].map((rating) => (
                     <label key={rating} className="flex items-center gap-2 cursor-pointer">
-                      <Checkbox 
+                      <Checkbox
                         checked={minRating === rating}
                         onCheckedChange={(checked) => setMinRating(checked ? rating : null)}
                       />
@@ -323,8 +341,8 @@ const BrowseShops = () => {
                   {searchMode === "shops" ? "Shops Near You" : "Products"}
                 </h1>
                 <p className="text-muted-foreground text-sm">
-                  {isLoading ? "Loading..." : 
-                    searchMode === "shops" 
+                  {isLoading ? "Loading..." :
+                    searchMode === "shops"
                       ? `${filteredShops.length} shops found`
                       : `${filteredProducts.length} products found`
                   }
@@ -338,12 +356,17 @@ const BrowseShops = () => {
                 </Button>
 
                 <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
-                  <button onClick={() => setViewMode("grid")} className={`p-2 rounded-md transition-colors ${viewMode === "grid" ? "bg-card shadow-sm" : ""}`}>
+                  <button onClick={() => setViewMode("grid")} className={`p-2 rounded-md transition-colors ${viewMode === "grid" ? "bg-card shadow-sm" : ""}`} title="Grid View">
                     <Grid3X3 className="w-4 h-4" />
                   </button>
-                  <button onClick={() => setViewMode("list")} className={`p-2 rounded-md transition-colors ${viewMode === "list" ? "bg-card shadow-sm" : ""}`}>
+                  <button onClick={() => setViewMode("list")} className={`p-2 rounded-md transition-colors ${viewMode === "list" ? "bg-card shadow-sm" : ""}`} title="List View">
                     <List className="w-4 h-4" />
                   </button>
+                  {searchMode === "shops" && (
+                    <button onClick={() => setViewMode("map")} className={`p-2 rounded-md transition-colors ${viewMode === "map" ? "bg-card shadow-sm" : ""}`} title="Map View">
+                      <MapIcon className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -367,9 +390,8 @@ const BrowseShops = () => {
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                    selectedCategory === cat ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"
-                  }`}
+                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${selectedCategory === cat ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"
+                    }`}
                 >
                   {cat}
                 </button>
@@ -381,68 +403,84 @@ const BrowseShops = () => {
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
             ) : searchMode === "shops" ? (
-              /* Shops Grid */
+              /* Shops View - Grid, List, or Map */
               <>
-                <div className={`grid gap-4 ${viewMode === "grid" ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" : "grid-cols-1"}`}>
-                  {filteredShops.map((shop) => {
-                    const shopOpen = isShopOpen(shop);
-                    return (
-                      <Link to={`/shop/${shop.id}`} key={shop.id}>
-                        <Card variant="elevated" className={`overflow-hidden group hover-lift ${viewMode === "list" ? "flex" : ""}`}>
-                          <div className={`relative overflow-hidden ${viewMode === "list" ? "w-48 shrink-0" : "aspect-[4/3]"}`}>
-                            <img
-                              src={shop.banner_image || "https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=400&h=300&fit=crop"}
-                              alt={shop.name}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            />
-                            <Badge variant={shopOpen ? "open" : "closed"} className="absolute top-3 left-3">
-                              {shopOpen ? "Open" : "Closed"}
-                            </Badge>
-                          </div>
+                {viewMode === "map" ? (
+                  <>
+                    {filteredShops.filter(s => s.latitude && s.longitude).length === 0 ? (
+                      <div className="h-96 flex flex-col items-center justify-center bg-muted rounded-xl">
+                        <MapPin className="w-12 h-12 text-muted-foreground mb-4" />
+                        <h3 className="font-semibold text-lg mb-2">No shops with location data</h3>
+                        <p className="text-muted-foreground text-sm text-center max-w-md">
+                          Shops haven't set their location yet. Try the grid or list view to browse available shops.
+                        </p>
+                      </div>
+                    ) : (
+                      <MapComponentPlaceholder />
+                    )}
+                  </>
+                ) : (
+                  <div className={`grid gap-4 ${viewMode === "grid" ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" : "grid-cols-1"}`}>
+                    {filteredShops.map((shop) => {
+                      const shopOpen = isShopOpen(shop);
+                      return (
+                        <Link to={`/shop/${shop.id}`} key={shop.id}>
+                          <Card variant="elevated" className={`overflow-hidden group hover-lift ${viewMode === "list" ? "flex" : ""}`}>
+                            <div className={`relative overflow-hidden ${viewMode === "list" ? "w-48 shrink-0" : "aspect-[4/3]"}`}>
+                              <img
+                                src={shop.banner_base64 || getFullImageUrl(shop.banner_image) || "https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=400&h=300&fit=crop"}
+                                alt={shop.name}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <Badge variant={shopOpen ? "open" : "closed"} className="absolute top-3 left-3">
+                                {shopOpen ? "Open" : "Closed"}
+                              </Badge>
+                            </div>
 
-                          <div className="p-4 flex-1">
-                            <div className="flex items-start justify-between mb-2">
-                              <div>
-                                <h3 className="font-display font-semibold text-lg group-hover:text-primary transition-colors">
-                                  {shop.name}
-                                </h3>
-                                <div className="flex gap-1 mt-1">
-                                  {shop.categories.slice(0, 2).map(cat => (
-                                    <Badge key={cat.id} variant="category">{cat.name}</Badge>
-                                  ))}
+                            <div className="p-4 flex-1">
+                              <div className="flex items-start justify-between mb-2">
+                                <div>
+                                  <h3 className="font-display font-semibold text-lg group-hover:text-primary transition-colors">
+                                    {shop.name}
+                                  </h3>
+                                  <div className="flex gap-1 mt-1">
+                                    {shop.categories.slice(0, 2).map(cat => (
+                                      <Badge key={cat.id} variant="category">{cat.name}</Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 bg-accent px-2 py-1 rounded-lg">
+                                  <Star className="w-4 h-4 fill-warning text-warning" />
+                                  <span className="font-medium text-sm">{shop.average_rating}</span>
+                                  <span className="text-xs text-muted-foreground">({shop.total_reviews})</span>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1 bg-accent px-2 py-1 rounded-lg">
-                                <Star className="w-4 h-4 fill-warning text-warning" />
-                                <span className="font-medium text-sm">{shop.average_rating}</span>
-                                <span className="text-xs text-muted-foreground">({shop.total_reviews})</span>
-                              </div>
-                            </div>
 
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
-                              <span className="flex items-center gap-1">
-                                <MapPin className="w-4 h-4" />
-                                {shop.delivery_radius} km
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-4 h-4" />
-                                {shop.is_open_24_7 ? "24 Hours" : `${shop.opening_time} - ${shop.closing_time}`}
-                              </span>
-                            </div>
-
-                            <p className="text-sm text-muted-foreground line-clamp-2">{shop.description}</p>
-                            
-                            {shop.offers_delivery && (
-                              <div className="mt-2 text-xs text-primary">
-                                🚚 Delivery available • Min ₹{shop.minimum_order_amount} • Fee ₹{shop.delivery_fee}
+                              <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="w-4 h-4" />
+                                  {shop.delivery_radius} km
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-4 h-4" />
+                                  {shop.is_open_24_7 ? "24 Hours" : `${shop.opening_time} - ${shop.closing_time}`}
+                                </span>
                               </div>
-                            )}
-                          </div>
-                        </Card>
-                      </Link>
-                    );
-                  })}
-                </div>
+
+                              <p className="text-sm text-muted-foreground line-clamp-2">{shop.description}</p>
+
+                              {shop.offers_delivery && (
+                                <div className="mt-2 text-xs text-primary">
+                                  🚚 Delivery available • Min ₹{shop.minimum_order_amount} • Fee ₹{shop.delivery_fee}
+                                </div>
+                              )}
+                            </div>
+                          </Card>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
 
                 {filteredShops.length === 0 && (
                   <div className="text-center py-16">
@@ -465,7 +503,7 @@ const BrowseShops = () => {
                       <Card variant="elevated" className={`overflow-hidden group hover-lift ${viewMode === "list" ? "flex" : ""}`}>
                         <div className={`relative overflow-hidden ${viewMode === "list" ? "w-40 shrink-0" : "aspect-square"}`}>
                           <img
-                            src={product.image || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop"}
+                            src={product.image_base64 || getFullImageUrl(product.image) || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop"}
                             alt={product.name}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
@@ -501,7 +539,7 @@ const BrowseShops = () => {
                           <Badge variant="category" className="mb-2">{product.category_name}</Badge>
 
                           <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{product.description}</p>
-                          
+
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               {product.is_on_sale && product.discount_price ? (

@@ -7,13 +7,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { 
-  Store, User, Mail, Phone, MapPin, Lock, Bell, Shield, 
+import {
+  Store, User, Mail, Phone, MapPin, Lock, Bell, Shield,
   Save, ArrowLeft, Camera, Eye, EyeOff, Check, Loader2, AlertTriangle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import authService from "@/services/authService";
+import { getFullImageUrl } from "@/lib/utils";
+import shopService from "@/services/shopService";
 
 const Settings = () => {
   const { user, refreshUser, logout } = useAuth();
@@ -41,15 +43,39 @@ const Settings = () => {
     email_orders: true, email_promotions: false, push_orders: true, push_promotions: false,
   });
 
+  // Shop Branding State
+  const [shopBanner, setShopBanner] = useState<string | null>(null);
+  const [shopLogo, setShopLogo] = useState<string | null>(null);
+  const [isSavingShop, setIsSavingShop] = useState(false);
+  const bannerImageRef = useRef<HTMLInputElement>(null);
+  const logoImageRef = useRef<HTMLInputElement>(null);
+  const [shopId, setShopId] = useState<number | null>(null);
+
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
     setProfileData({
       first_name: user.first_name || "", last_name: user.last_name || "",
       email: user.email || "", phone_number: user.phone_number || "", address: user.address || "",
     });
-    setProfileImage(user.profile_picture || null);
+    setProfileImage(getFullImageUrl(user.profile_picture));
     loadNotificationPreferences();
+    if (user.user_type === 'shopkeeper') {
+      loadShopBranding();
+    }
   }, [user]);
+
+  const loadShopBranding = async () => {
+    try {
+      const shop = await shopService.getMyShop();
+      if (shop) {
+        setShopId(shop.id);
+        setShopBanner(shop.banner_base64 || getFullImageUrl(shop.banner_image));
+        setShopLogo(shop.logo_base64 || getFullImageUrl(shop.logo));
+      }
+    } catch (error) {
+      console.error('Failed to load shop branding');
+    }
+  };
 
   const loadNotificationPreferences = async () => {
     try {
@@ -97,10 +123,10 @@ const Settings = () => {
       toast({ title: "Profile updated", description: "Your profile has been updated successfully" });
     } catch (error: any) {
       console.error('Profile update error:', error.response?.data);
-      const errorMsg = error.response?.data?.detail || 
-                       error.response?.data?.error || 
-                       Object.values(error.response?.data || {}).flat().join(', ') ||
-                       "Failed to update profile";
+      const errorMsg = error.response?.data?.detail ||
+        error.response?.data?.error ||
+        Object.values(error.response?.data || {}).flat().join(', ') ||
+        "Failed to update profile";
       toast({ title: "Error", description: errorMsg, variant: "destructive" });
     } finally {
       setIsLoading(false);
@@ -159,6 +185,52 @@ const Settings = () => {
     }
   };
 
+  const handleBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast({ title: "Error", description: "Image must be less than 5MB", variant: "destructive" });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setShopBanner(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        toast({ title: "Error", description: "Logo must be less than 2MB", variant: "destructive" });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setShopLogo(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveShopBranding = async () => {
+    setIsSavingShop(true);
+    try {
+      const data: any = {};
+      if (shopBanner && shopBanner.startsWith('data:')) data.banner_base64 = shopBanner;
+      if (shopLogo && shopLogo.startsWith('data:')) data.logo_base64 = shopLogo;
+
+      await shopService.updateMyShop(data);
+      toast({ title: "Shop branding updated", description: "Your shop banner and logo have been updated" });
+    } catch (error: any) {
+      toast({ title: "Error", description: "Failed to update shop branding", variant: "destructive" });
+    } finally {
+      setIsSavingShop(false);
+    }
+  };
+
   const getDashboardLink = () => {
     if (!user) return '/login';
     switch (user.user_type) {
@@ -198,8 +270,11 @@ const Settings = () => {
         </div>
 
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className={`grid w-full ${user?.user_type === 'shopkeeper' ? 'grid-cols-4' : 'grid-cols-3'}`}>
             <TabsTrigger value="profile" className="gap-2"><User className="w-4 h-4" />Profile</TabsTrigger>
+            {user?.user_type === 'shopkeeper' && (
+              <TabsTrigger value="shop" className="gap-2"><Store className="w-4 h-4" />Shop Profile</TabsTrigger>
+            )}
             <TabsTrigger value="security" className="gap-2"><Shield className="w-4 h-4" />Security</TabsTrigger>
             <TabsTrigger value="notifications" className="gap-2"><Bell className="w-4 h-4" />Notifications</TabsTrigger>
           </TabsList>
@@ -216,9 +291,9 @@ const Settings = () => {
                   <div className="flex items-center gap-6">
                     <div className="relative">
                       {profileImage ? (
-                        <img src={profileImage} alt="Profile" className="w-24 h-24 rounded-full object-cover" />
+                        <img src={profileImage} alt="Profile" className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md" />
                       ) : (
-                        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white text-3xl font-bold">
+                        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white text-3xl font-bold shadow-md">
                           {user.first_name?.[0] || user.username?.[0] || 'U'}
                         </div>
                       )}
@@ -246,6 +321,77 @@ const Settings = () => {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Shop Profile Tab */}
+          {user?.user_type === 'shopkeeper' && (
+            <TabsContent value="shop">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Shop Branding</CardTitle>
+                  <CardDescription>Customize how your shop looks to customers</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-8">
+                  <div className="space-y-4">
+                    <Label className="text-sm font-medium">Shop Banner</Label>
+                    <p className="text-xs text-muted-foreground">Appears at the top of your shop page and in browse listings</p>
+                    <div className="relative">
+                      <div className="aspect-[3/1] rounded-xl border-2 border-dashed border-border overflow-hidden bg-accent/50 flex items-center justify-center">
+                        {shopBanner ? (
+                          <img src={shopBanner} alt="Shop Banner" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="text-center p-4">
+                            <Camera className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                            <p className="text-sm text-muted-foreground">No banner uploaded</p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-3 flex gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => bannerImageRef.current?.click()}>
+                          <Camera className="w-4 h-4 mr-2" />{shopBanner ? 'Change Banner' : 'Upload Banner'}
+                        </Button>
+                        {shopBanner && (
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setShopBanner(null)}>
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                      <input ref={bannerImageRef} type="file" accept="image/*" onChange={handleBannerUpload} className="hidden" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <Label className="text-sm font-medium">Shop Logo</Label>
+                    <p className="text-xs text-muted-foreground">Appears next to your shop name</p>
+                    <div className="flex items-center gap-4">
+                      <div className="w-24 h-24 rounded-xl border-2 border-dashed border-border overflow-hidden bg-accent/50 flex items-center justify-center">
+                        {shopLogo ? (
+                          <img src={shopLogo} alt="Shop Logo" className="w-full h-full object-cover" />
+                        ) : (
+                          <Store className="w-8 h-8 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div>
+                        <Button type="button" variant="outline" size="sm" onClick={() => logoImageRef.current?.click()}>
+                          <Camera className="w-4 h-4 mr-2" />{shopLogo ? 'Change Logo' : 'Upload Logo'}
+                        </Button>
+                        {shopLogo && (
+                          <Button type="button" variant="ghost" size="sm" className="ml-2" onClick={() => setShopLogo(null)}>
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                      <input ref={logoImageRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                    </div>
+                  </div>
+
+                  <Button onClick={handleSaveShopBranding} disabled={isSavingShop}>
+                    {isSavingShop ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                    {isSavingShop ? "Saving..." : "Save Shop Branding"}
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
 
           {/* Security Tab */}
           <TabsContent value="security">
@@ -303,11 +449,11 @@ const Settings = () => {
                   <div className="space-y-4">
                     <label className="flex items-center justify-between cursor-pointer">
                       <div><p className="font-medium">Order Updates</p><p className="text-sm text-muted-foreground">Receive emails about your order status</p></div>
-                      <input type="checkbox" checked={notifications.email_orders} onChange={(e) => setNotifications({...notifications, email_orders: e.target.checked})} className="w-5 h-5 rounded" />
+                      <input type="checkbox" checked={notifications.email_orders} onChange={(e) => setNotifications({ ...notifications, email_orders: e.target.checked })} className="w-5 h-5 rounded" />
                     </label>
                     <label className="flex items-center justify-between cursor-pointer">
                       <div><p className="font-medium">Promotions & Offers</p><p className="text-sm text-muted-foreground">Receive emails about deals and discounts</p></div>
-                      <input type="checkbox" checked={notifications.email_promotions} onChange={(e) => setNotifications({...notifications, email_promotions: e.target.checked})} className="w-5 h-5 rounded" />
+                      <input type="checkbox" checked={notifications.email_promotions} onChange={(e) => setNotifications({ ...notifications, email_promotions: e.target.checked })} className="w-5 h-5 rounded" />
                     </label>
                   </div>
                 </div>
@@ -316,11 +462,11 @@ const Settings = () => {
                   <div className="space-y-4">
                     <label className="flex items-center justify-between cursor-pointer">
                       <div><p className="font-medium">Order Updates</p><p className="text-sm text-muted-foreground">Get push notifications for order status</p></div>
-                      <input type="checkbox" checked={notifications.push_orders} onChange={(e) => setNotifications({...notifications, push_orders: e.target.checked})} className="w-5 h-5 rounded" />
+                      <input type="checkbox" checked={notifications.push_orders} onChange={(e) => setNotifications({ ...notifications, push_orders: e.target.checked })} className="w-5 h-5 rounded" />
                     </label>
                     <label className="flex items-center justify-between cursor-pointer">
                       <div><p className="font-medium">Promotions & Offers</p><p className="text-sm text-muted-foreground">Get notified about deals nearby</p></div>
-                      <input type="checkbox" checked={notifications.push_promotions} onChange={(e) => setNotifications({...notifications, push_promotions: e.target.checked})} className="w-5 h-5 rounded" />
+                      <input type="checkbox" checked={notifications.push_promotions} onChange={(e) => setNotifications({ ...notifications, push_promotions: e.target.checked })} className="w-5 h-5 rounded" />
                     </label>
                   </div>
                 </div>

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
+import {
   ArrowLeft, Star, MapPin, Clock, Phone, Share2, Heart,
   Plus, Minus, ShoppingCart, Store, Grid3X3, List, Loader2
 } from "lucide-react";
@@ -12,6 +12,19 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import shopService from "@/services/shopService";
 import orderService from "@/services/orderService";
+import { getFullImageUrl } from "@/lib/utils";
+import { lazy, Suspense } from "react";
+
+// Lazy load map component
+// const MapComponent = lazy(() => import('@/components/MapComponent'));
+
+// DUMMY MAP COMPONENT
+const MapComponentPlaceholder = () => (
+  <div className="h-full bg-muted rounded-xl flex flex-col items-center justify-center p-4 text-center border-2 border-dashed border-gray-200">
+    <MapPin className="w-8 h-8 text-gray-400 mb-2" />
+    <p className="text-sm font-medium text-gray-600">Map integration temporarily disabled</p>
+  </div>
+);
 
 const ShopDetail = () => {
   const { id } = useParams();
@@ -45,7 +58,7 @@ const ShopDetail = () => {
       try {
         const reviewsData = await shopService.getShopReviews(Number(id));
         // Handle both array and paginated response
-        setReviews(Array.isArray(reviewsData) ? reviewsData : (reviewsData?.results || []));
+        setReviews(Array.isArray(reviewsData) ? reviewsData : ((reviewsData as any)?.results || []));
       } catch {
         setReviews([]);
       }
@@ -63,7 +76,7 @@ const ShopDetail = () => {
       navigate('/signup');
       return;
     }
-    
+
     setAddingToCart(productId);
     try {
       await orderService.addToCart(productId, 1);
@@ -147,7 +160,7 @@ const ShopDetail = () => {
       {/* Cover Image */}
       <div className="relative h-48 md:h-64">
         <img
-          src={shop.banner_image || "https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=1200&h=400&fit=crop"}
+          src={shop.banner_base64 || getFullImageUrl(shop.banner_image) || "https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=1200&h=400&fit=crop"}
           alt={shop.name}
           className="w-full h-full object-cover"
         />
@@ -161,7 +174,7 @@ const ShopDetail = () => {
             {/* Shop Logo */}
             <div className="w-24 h-24 rounded-xl overflow-hidden border-4 border-card shadow-lg shrink-0">
               <img
-                src={shop.logo || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=100&h=100&fit=crop"}
+                src={shop.logo_base64 || getFullImageUrl(shop.logo) || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=100&h=100&fit=crop"}
                 alt={shop.name}
                 className="w-full h-full object-cover"
               />
@@ -242,11 +255,10 @@ const ShopDetail = () => {
               </div>
             </div>
 
-            <div className={`grid gap-4 ${
-              viewMode === "grid"
-                ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
-                : "grid-cols-1"
-            }`}>
+            <div className={`grid gap-4 ${viewMode === "grid"
+              ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+              : "grid-cols-1"
+              }`}>
               {products.length === 0 ? (
                 <div className="col-span-full text-center py-8 text-muted-foreground">
                   <Store className="w-12 h-12 mx-auto mb-3 text-gray-300" />
@@ -259,7 +271,7 @@ const ShopDetail = () => {
                 >
                   <div className={`relative ${viewMode === "list" ? "w-32 shrink-0" : "aspect-square"}`}>
                     <img
-                      src={product.image || "https://images.unsplash.com/photo-1546470427-f5c7f9f9f9f9?w=200&h=200&fit=crop"}
+                      src={product.image_base64 || getFullImageUrl(product.image) || "https://images.unsplash.com/photo-1546470427-f5c7f9f9f9f9?w=200&h=200&fit=crop"}
                       alt={product.name}
                       className="w-full h-full object-cover"
                     />
@@ -347,12 +359,18 @@ const ShopDetail = () => {
                   </div>
                 </div>
 
-                {/* Map placeholder */}
-                <div className="h-48 bg-muted rounded-xl flex items-center justify-center">
-                  <div className="text-center text-muted-foreground">
-                    <MapPin className="w-8 h-8 mx-auto mb-2" />
-                    <p className="text-sm">Map view</p>
-                  </div>
+                {/* Map */}
+                <div className="h-64 rounded-xl overflow-hidden">
+                  {shop.latitude && shop.longitude ? (
+                    <MapComponentPlaceholder />
+                  ) : (
+                    <div className="h-full bg-muted rounded-xl flex items-center justify-center">
+                      <div className="text-center text-muted-foreground">
+                        <MapPin className="w-8 h-8 mx-auto mb-2" />
+                        <p className="text-sm">Location not available</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </Card>
